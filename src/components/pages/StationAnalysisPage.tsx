@@ -32,30 +32,66 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
   const [station, setStation] = useState("DEL");
   const details = CHART_DETAILS.stationAnalysis;
 
+  const stationIncidents = useMemo(
+    () => data.incidents.filter((i) => i.station === station),
+    [data.incidents, station],
+  );
+
   const scoped = useMemo(() => {
-    const incidents = data.incidents.filter((i) => i.station === station);
-    const ramp = incidents.filter((i) => i.department === "RAMP").length;
-    const gsd = incidents.filter((i) => i.department === "GSD").length;
-    const closed = incidents.filter((i) => i.status === "Closed").length;
-    const catA = incidents.filter((i) => i.category === "CAT-A").length;
-    const catB = incidents.filter((i) => i.category === "CAT-B").length;
-    const catC = incidents.filter((i) => i.category === "CAT-C").length;
-    const catD = incidents.filter((i) => i.category === "CAT-D").length;
-    const types = [
-      ...new Set(incidents.map((i) => normalizeIncidentType(i.incidentType))),
-    ].map((label) => ({
+    const incidents = stationIncidents;
+    let ramp = 0;
+    let gsd = 0;
+    let closed = 0;
+    let catA = 0;
+    let catB = 0;
+    let catC = 0;
+    let catD = 0;
+
+    const typeMap = new Map<
+      string,
+      { count: number; catA: number; catB: number; catC: number; catD: number; open: number; closed: number }
+    >();
+    const factorMap = new Map<string, number>();
+
+    for (const inc of incidents) {
+      if (inc.department === "RAMP") ramp += 1;
+      else if (inc.department === "GSD") gsd += 1;
+      if (inc.status === "Closed") closed += 1;
+      if (inc.category === "CAT-A") catA += 1;
+      else if (inc.category === "CAT-B") catB += 1;
+      else if (inc.category === "CAT-C") catC += 1;
+      else if (inc.category === "CAT-D") catD += 1;
+
+      const typeKey = normalizeIncidentType(inc.incidentType);
+      const typeEntry = typeMap.get(typeKey) ?? {
+        count: 0,
+        catA: 0,
+        catB: 0,
+        catC: 0,
+        catD: 0,
+        open: 0,
+        closed: 0,
+      };
+      typeEntry.count += 1;
+      if (inc.category === "CAT-A") typeEntry.catA += 1;
+      else if (inc.category === "CAT-B") typeEntry.catB += 1;
+      else if (inc.category === "CAT-C") typeEntry.catC += 1;
+      else if (inc.category === "CAT-D") typeEntry.catD += 1;
+      if (inc.status === "Open") typeEntry.open += 1;
+      else if (inc.status === "Closed") typeEntry.closed += 1;
+      typeMap.set(typeKey, typeEntry);
+
+      if (inc.contributingFactor) {
+        factorMap.set(inc.contributingFactor, (factorMap.get(inc.contributingFactor) ?? 0) + 1);
+      }
+    }
+
+    const types = [...typeMap.entries()].map(([label, entry]) => ({
       label,
-      value: incidents.filter(
-        (i) => normalizeIncidentType(i.incidentType) === label,
-      ).length,
+      value: entry.count,
     }));
+    const factors = [...factorMap.entries()].map(([label, value]) => ({ label, value }));
     const monthly = buildMonthlyTrendForIncidents(incidents);
-    const factors = [...new Set(incidents.map((i) => i.contributingFactor).filter(Boolean))].map(
-      (label) => ({
-        label,
-        value: incidents.filter((i) => i.contributingFactor === label).length,
-      }),
-    );
 
     return {
       incidents,
@@ -70,24 +106,19 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
       types,
       monthly,
       factors,
-      breakdown: types.map(({ label, value }) => {
-        const list = incidents.filter(
-          (i) => normalizeIncidentType(i.incidentType) === label,
-        );
-        return {
-          incidentType: label,
-          count: value,
-          pct: incidents.length ? Math.round((value / incidents.length) * 1000) / 10 : 0,
-          catA: list.filter((i) => i.category === "CAT-A").length,
-          catB: list.filter((i) => i.category === "CAT-B").length,
-          catC: list.filter((i) => i.category === "CAT-C").length,
-          catD: list.filter((i) => i.category === "CAT-D").length,
-          open: list.filter((i) => i.status === "Open").length,
-          closed: list.filter((i) => i.status === "Closed").length,
-        };
-      }),
+      breakdown: [...typeMap.entries()].map(([incidentType, entry]) => ({
+        incidentType,
+        count: entry.count,
+        pct: incidents.length ? Math.round((entry.count / incidents.length) * 1000) / 10 : 0,
+        catA: entry.catA,
+        catB: entry.catB,
+        catC: entry.catC,
+        catD: entry.catD,
+        open: entry.open,
+        closed: entry.closed,
+      })),
     };
-  }, [data, station]);
+  }, [stationIncidents]);
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible">

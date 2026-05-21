@@ -23,7 +23,7 @@ export function LoadingSkeleton() {
     <div className="space-y-4 animate-pulse">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="glass-card h-24" />
+          <div key={`skeleton-${i}`} className="glass-card h-24" />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">

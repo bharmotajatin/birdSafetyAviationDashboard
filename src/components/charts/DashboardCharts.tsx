@@ -14,6 +14,7 @@ import {
   useChartTheme,
 } from "@/lib/chart-theme";
 import { buildTreemapNodes } from "@/lib/treemap-theme";
+import type { ChartData, ChartOptions } from "chart.js";
 import type { Context } from "chartjs-plugin-datalabels";
 import { cn } from "@/lib/utils";
 import {
@@ -213,7 +214,7 @@ export function CountChart({
     return (
       <RadialChartLayout
         labelCount={labels.length}
-        chart={<Pie data={data} options={radialOptions as never} />}
+        chart={<Pie data={data} options={radialOptions as ChartOptions<"pie">} />}
         legend={legend}
         legendVariant={legendVariant}
       />
@@ -224,7 +225,7 @@ export function CountChart({
     return (
       <RadialChartLayout
         labelCount={labels.length}
-        chart={<Doughnut data={data} options={radialOptions as never} />}
+        chart={<Doughnut data={data} options={radialOptions as ChartOptions<"doughnut">} />}
         legend={legend}
         centerOverlay={
           centerText ? (
@@ -244,7 +245,7 @@ export function CountChart({
 
   return (
     <ChartSurface>
-      <Bar data={data} options={barOptions as never} />
+      <Bar data={data} options={barOptions as ChartOptions<"bar">} />
     </ChartSurface>
   );
 }
@@ -347,7 +348,7 @@ export function RadarMetricChart({
                 suggestedMax: max * 1.15,
               },
             },
-          } as never
+          } as ChartOptions<"radar">
         }
       />
     </ChartSurface>
@@ -403,7 +404,7 @@ export function SingleSeriesAreaChart({
               ...chartOptions.plugins,
               ...buildTooltipOnlyChartOptions(theme),
             },
-          } as never
+          } as ChartOptions<"line">
         }
       />
     </ChartSurface>
@@ -462,7 +463,7 @@ export function ComboTrendChart({ labels, totals, catA, rollingAvg }: ComboTrend
     <ChartSurface>
       <Chart
         type="bar"
-        data={data as never}
+        data={data as ChartData<"bar" | "line", number[], string>}
         options={
           {
             ...chartOptions,
@@ -473,7 +474,7 @@ export function ComboTrendChart({ labels, totals, catA, rollingAvg }: ComboTrend
                 labels: { color: theme.legend, boxWidth: 12, font: { size: 11 } },
               },
             },
-          } as never
+          } as ChartOptions<"bar" | "line">
         }
       />
     </ChartSurface>
@@ -515,7 +516,7 @@ export function GroupedBarChart({ labels, series }: GroupedBarProps) {
               ...chartOptions.plugins,
               datalabels: dataLabels,
             },
-          } as never
+          } as ChartOptions<"bar">
         }
       />
     </ChartSurface>
@@ -601,7 +602,7 @@ export function AreaTrendChart({ labels, totals, catA, averageLine }: AreaTrendP
                 labels: { color: theme.legend, boxWidth: 12, font: { size: 11 } },
               },
             },
-          } as never
+          } as ChartOptions<"line">
         }
       />
     </ChartSurface>
@@ -651,7 +652,7 @@ export function StackedStatusBar({ labels, open, closed }: StackedBarProps) {
               x: { ...chartOptions.scales?.x, stacked: true },
               y: { ...chartOptions.scales?.y, stacked: true },
             },
-          } as never
+          } as ChartOptions<"bar">
         }
       />
     </ChartSurface>
@@ -717,7 +718,7 @@ export function RiskScatterChart({ points }: { points: ScatterPoint[] }) {
                 title: { display: true, text: "Risk score", color: theme.tick },
               },
             },
-          } as never
+          } as ChartOptions<"scatter">
         }
       />
     </ChartSurface>
@@ -827,7 +828,7 @@ export function IncidentTimeline({
                 grid: { color: theme.grid },
               },
             },
-          } as never
+          } as ChartOptions<"scatter">
         }
       />
     </ChartSurface>

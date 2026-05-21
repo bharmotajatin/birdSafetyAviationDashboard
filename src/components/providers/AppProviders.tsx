@@ -3,12 +3,14 @@
 import { Toaster } from "react-hot-toast";
 import { DataFolderWatcher } from "@/components/layout/DataFolderWatcher";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ErrorMonitorButton } from "@/components/ui/ErrorMonitorButton";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       {children}
       <DataFolderWatcher />
+      <ErrorMonitorButton />
       <Toaster
         position="top-right"
         toastOptions={{

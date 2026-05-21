@@ -29,39 +29,98 @@ export function calcRiskLevel(score: number, catA: number, total: number): RiskL
 }
 
 export function buildKpis(incidents: Incident[]): DashboardKpis {
-  const total = incidents.length;
-  const open = incidents.filter((i) => i.status === "Open").length;
-  const inProgress = incidents.filter((i) => i.status === "In Progress").length;
-  const closed = incidents.filter((i) => i.status === "Closed").length;
-  const pending = incidents.filter((i) => i.status === "Pending").length;
-  const catA = incidents.filter((i) => i.category === "CAT-A").length;
-  const catB = incidents.filter((i) => i.category === "CAT-B").length;
-  const catC = incidents.filter((i) => i.category === "CAT-C").length;
-  const catD = incidents.filter((i) => i.category === "CAT-D").length;
-  const staffInjuries = incidents.filter((i) =>
-    i.incidentType.toLowerCase().includes("staff injury"),
-  ).length;
-  const nearMiss = incidents.filter((i) =>
-    i.incidentType.toLowerCase().includes("near miss"),
-  ).length;
-  const ramp = incidents.filter((i) => i.department === "RAMP").length;
-  const gsd = incidents.filter((i) => i.department === "GSD").length;
+  const acc = incidents.reduce(
+    (counts, inc) => {
+      counts.total += 1;
+      if (inc.status === "Open") counts.open += 1;
+      else if (inc.status === "In Progress") counts.inProgress += 1;
+      else if (inc.status === "Closed") counts.closed += 1;
+      else if (inc.status === "Pending") counts.pending += 1;
+
+      if (inc.category === "CAT-A") counts.catA += 1;
+      else if (inc.category === "CAT-B") counts.catB += 1;
+      else if (inc.category === "CAT-C") counts.catC += 1;
+      else if (inc.category === "CAT-D") counts.catD += 1;
+
+      const typeLower = inc.incidentType.toLowerCase();
+      if (typeLower.includes("staff injury")) counts.staffInjuries += 1;
+      if (typeLower.includes("near miss")) counts.nearMiss += 1;
+
+      if (inc.department === "RAMP") counts.ramp += 1;
+      else if (inc.department === "GSD") counts.gsd += 1;
+
+      return counts;
+    },
+    {
+      total: 0,
+      open: 0,
+      inProgress: 0,
+      closed: 0,
+      pending: 0,
+      catA: 0,
+      catB: 0,
+      catC: 0,
+      catD: 0,
+      staffInjuries: 0,
+      nearMiss: 0,
+      ramp: 0,
+      gsd: 0,
+    },
+  );
 
   return {
+    ...acc,
+    closureRate: pct(acc.closed, acc.total),
+  };
+}
+
+function statsFromIncidentGroup(station: string, list: Incident[]): StationStats {
+  let catA = 0;
+  let catB = 0;
+  let catC = 0;
+  let catD = 0;
+  let closed = 0;
+  let open = 0;
+  let inProgress = 0;
+  let pending = 0;
+  let nearMiss = 0;
+  let staffInjuries = 0;
+
+  for (const inc of list) {
+    if (inc.category === "CAT-A") catA += 1;
+    else if (inc.category === "CAT-B") catB += 1;
+    else if (inc.category === "CAT-C") catC += 1;
+    else if (inc.category === "CAT-D") catD += 1;
+
+    if (inc.status === "Open") open += 1;
+    else if (inc.status === "In Progress") inProgress += 1;
+    else if (inc.status === "Closed") closed += 1;
+    else if (inc.status === "Pending") pending += 1;
+
+    const typeLower = inc.incidentType.toLowerCase();
+    if (typeLower.includes("near miss")) nearMiss += 1;
+    if (typeLower.includes("staff injury")) staffInjuries += 1;
+  }
+
+  const total = list.length;
+  const riskScore = calcRiskScore(catA, catB, catC, catD);
+
+  return {
+    station,
     total,
-    open,
-    inProgress,
-    closed,
-    pending,
     catA,
     catB,
     catC,
     catD,
-    staffInjuries,
-    nearMiss,
-    ramp,
-    gsd,
+    riskScore,
+    riskLevel: calcRiskLevel(riskScore, catA, total),
+    closed,
+    open,
+    inProgress,
+    pending,
     closureRate: pct(closed, total),
+    nearMiss,
+    staffInjuries,
   };
 }
 
@@ -69,41 +128,17 @@ export function buildStationStats(
   incidents: Incident[],
   stationCodes: string[] = [...STATIONS],
 ): StationStats[] {
-  return stationCodes.map((station) => {
-    const list = incidents.filter((i) => i.station === station);
-    const catA = list.filter((i) => i.category === "CAT-A").length;
-    const catB = list.filter((i) => i.category === "CAT-B").length;
-    const catC = list.filter((i) => i.category === "CAT-C").length;
-    const catD = list.filter((i) => i.category === "CAT-D").length;
-    const closed = list.filter((i) => i.status === "Closed").length;
-    const open = list.filter((i) => i.status === "Open").length;
-    const inProgress = list.filter((i) => i.status === "In Progress").length;
-    const pending = list.filter((i) => i.status === "Pending").length;
-    const total = list.length;
-    const riskScore = calcRiskScore(catA, catB, catC, catD);
+  const byStation = incidents.reduce((map, inc) => {
+    const key = String(inc.station);
+    const group = map.get(key) ?? [];
+    group.push(inc);
+    map.set(key, group);
+    return map;
+  }, new Map<string, Incident[]>());
 
-    return {
-      station,
-      total,
-      catA,
-      catB,
-      catC,
-      catD,
-      riskScore,
-      riskLevel: calcRiskLevel(riskScore, catA, total),
-      closed,
-      open,
-      inProgress,
-      pending,
-      closureRate: pct(closed, total),
-      nearMiss: list.filter((i) =>
-        i.incidentType.toLowerCase().includes("near miss"),
-      ).length,
-      staffInjuries: list.filter((i) =>
-        i.incidentType.toLowerCase().includes("staff injury"),
-      ).length,
-    };
-  });
+  return stationCodes.map((station) =>
+    statsFromIncidentGroup(station, byStation.get(station) ?? []),
+  );
 }
 
 export function buildMonthlyTrend(incidents: Incident[]): MonthlyTrendPoint[] {
@@ -121,12 +156,20 @@ export function buildMonthlyTrend(incidents: Incident[]): MonthlyTrendPoint[] {
   sortedKeys.forEach((monthKey, index) => {
     const list = monthMap.get(monthKey) ?? [];
     const total = list.length;
-    const catA = list.filter((i) => i.category === "CAT-A").length;
-    const catB = list.filter((i) => i.category === "CAT-B").length;
-    const catC = list.filter((i) => i.category === "CAT-C").length;
-    const catD = list.filter((i) => i.category === "CAT-D").length;
-    const closed = list.filter((i) => i.status === "Closed").length;
-    const open = list.filter((i) => i.status === "Open").length;
+    let catA = 0;
+    let catB = 0;
+    let catC = 0;
+    let catD = 0;
+    let closed = 0;
+    let open = 0;
+    for (const inc of list) {
+      if (inc.category === "CAT-A") catA += 1;
+      else if (inc.category === "CAT-B") catB += 1;
+      else if (inc.category === "CAT-C") catC += 1;
+      else if (inc.category === "CAT-D") catD += 1;
+      if (inc.status === "Closed") closed += 1;
+      else if (inc.status === "Open") open += 1;
+    }
     const prevTotal = index > 0 ? (points[index - 1]?.total ?? 0) : null;
     const changeVsLast =
       prevTotal == null ? null : total - prevTotal;
@@ -165,31 +208,83 @@ export function buildMonthlyTrend(incidents: Incident[]): MonthlyTrendPoint[] {
     });
   });
 
+  const bucketedTotal = points.reduce((sum, p) => sum + p.total, 0);
+  const unknownCount = incidents.length - bucketedTotal;
+  if (unknownCount > 0) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Incidents with unparseable dates:", unknownCount);
+    }
+    points.push({
+      monthKey: "unknown",
+      label: "Unknown Date",
+      total: unknownCount,
+      catA: 0,
+      catB: 0,
+      catC: 0,
+      catD: 0,
+      closed: 0,
+      open: 0,
+      closureRate: 0,
+      changeVsLast: null,
+      trend: "FLAT",
+      rollingAvg3: null,
+    });
+  }
+
   return points;
 }
 
 export function buildIncidentTypeBreakdown(
   incidents: Incident[],
 ): IncidentTypeBreakdown[] {
-  const types = countBy(incidents, (i) => normalizeIncidentType(i.incidentType));
   const total = incidents.length || 1;
+  const byType = incidents.reduce(
+    (map, inc) => {
+      const key = normalizeIncidentType(inc.incidentType);
+      const entry = map.get(key) ?? {
+        count: 0,
+        catA: 0,
+        catB: 0,
+        catC: 0,
+        catD: 0,
+        open: 0,
+        closed: 0,
+      };
+      entry.count += 1;
+      if (inc.category === "CAT-A") entry.catA += 1;
+      else if (inc.category === "CAT-B") entry.catB += 1;
+      else if (inc.category === "CAT-C") entry.catC += 1;
+      else if (inc.category === "CAT-D") entry.catD += 1;
+      if (inc.status === "Open") entry.open += 1;
+      else if (inc.status === "Closed") entry.closed += 1;
+      map.set(key, entry);
+      return map;
+    },
+    new Map<
+      string,
+      {
+        count: number;
+        catA: number;
+        catB: number;
+        catC: number;
+        catD: number;
+        open: number;
+        closed: number;
+      }
+    >(),
+  );
 
-  return types.map(({ label, value }) => {
-    const list = incidents.filter(
-      (i) => normalizeIncidentType(i.incidentType) === label,
-    );
-    return {
-      incidentType: label,
-      count: value,
-      pct: pct(value, total),
-      catA: list.filter((i) => i.category === "CAT-A").length,
-      catB: list.filter((i) => i.category === "CAT-B").length,
-      catC: list.filter((i) => i.category === "CAT-C").length,
-      catD: list.filter((i) => i.category === "CAT-D").length,
-      open: list.filter((i) => i.status === "Open").length,
-      closed: list.filter((i) => i.status === "Closed").length,
-    };
-  });
+  return [...byType.entries()].map(([incidentType, entry]) => ({
+    incidentType,
+    count: entry.count,
+    pct: pct(entry.count, total),
+    catA: entry.catA,
+    catB: entry.catB,
+    catC: entry.catC,
+    catD: entry.catD,
+    open: entry.open,
+    closed: entry.closed,
+  }));
 }
 
 export function buildDashboardData(input: BuildInput): DashboardData {

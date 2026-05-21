@@ -15,7 +15,10 @@ export type DataFileWatchEvent = {
 export const dataWatchEmitter = new EventEmitter();
 dataWatchEmitter.setMaxListeners(50);
 
+import type { FSWatcher } from "chokidar";
+
 let watcherStarted = false;
+let activeWatcher: FSWatcher | null = null;
 
 const recentEmit = new Map<string, number>();
 const EMIT_DEBOUNCE_MS = 1500;
@@ -45,7 +48,7 @@ export async function startDataFolderWatcher(): Promise<void> {
   const dataDir = getDataDirectory();
 
   const chokidar = await import("chokidar");
-  const watcher = chokidar.watch(dataDir, {
+  activeWatcher = chokidar.watch(dataDir, {
     persistent: true,
     ignoreInitial: false,
     usePolling: true,
@@ -60,10 +63,17 @@ export async function startDataFolderWatcher(): Promise<void> {
     },
   });
 
-  watcher.on("add", (fp: string) => notify(fp, "add"));
-  watcher.on("change", (fp: string) => notify(fp, "change"));
+  activeWatcher.on("add", (fp: string) => notify(fp, "add"));
+  activeWatcher.on("change", (fp: string) => notify(fp, "change"));
 
   console.info(`[data-watcher] Watching ${dataDir} for Excel workbooks`);
+}
+
+export async function stopDataFolderWatcher(): Promise<void> {
+  if (!activeWatcher) return;
+  await activeWatcher.close();
+  activeWatcher = null;
+  watcherStarted = false;
 }
 
 export function isDevWatcherEnabled(): boolean {

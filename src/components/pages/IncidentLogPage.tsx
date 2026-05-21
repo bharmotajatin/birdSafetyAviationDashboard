@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Eye } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { IncidentDetailDrawer } from "@/components/dashboard/IncidentDetailDrawer";
 import { PageDataRequired } from "@/components/layout/PageDataRequired";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
@@ -30,7 +30,8 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
   const selectedIncident = useDashboardStore((s) => s.selectedIncident);
   const kpis = data.kpis;
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const deferredSearch = useDeferredValue(searchInput);
   const [department, setDepartment] = useState("All");
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
@@ -40,14 +41,14 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
   const filtered = useMemo(
     () =>
       filterIncidents(data.incidents, {
-        search,
+        search: deferredSearch,
         department,
         category,
         status,
         dateFrom,
         dateTo,
       }),
-    [data.incidents, search, department, category, status, dateFrom, dateTo],
+    [data.incidents, deferredSearch, department, category, status, dateFrom, dateTo],
   );
 
   const typeLabels = data.incidentTypes.map((i) => i.label);
@@ -73,8 +74,8 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
 
       <motion.div variants={fadeUp} custom={5} className="glass-card interactive-card mb-6 grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-5">
         <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search title or GHR…"
           className="theme-input rounded-md px-3 py-2 text-sm"
         />

@@ -96,7 +96,7 @@ export function WorkbookValidationPanel({
                 ) : (
                   validation.issues.map((issue, index) => (
                     <tr
-                      key={`${issue.sheet}-${issue.row}-${issue.column}-${index}`}
+                      key={`issue-${index}`}
                       className={
                         issue.severity === "error"
                           ? "validation-row-error"

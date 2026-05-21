@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 
@@ -13,7 +13,7 @@ export function DataFolderWatcher() {
   const processingRef = useRef(new Set<string>());
   const lastSnapshotsRef = useRef<Map<string, number>>(new Map());
 
-  const ingestFile = async (fileName: string) => {
+  const ingestFile = useCallback(async (fileName: string) => {
     if (processingRef.current.has(fileName)) return;
     processingRef.current.add(fileName);
 
@@ -46,7 +46,7 @@ export function DataFolderWatcher() {
     } finally {
       processingRef.current.delete(fileName);
     }
-  };
+  }, [mergeFromDataFile]);
 
   useEffect(() => {
     if (!isDev) return;
@@ -74,7 +74,7 @@ export function DataFolderWatcher() {
     return () => {
       source.close();
     };
-  }, [mergeFromDataFile]);
+  }, [ingestFile]);
 
   // Production: poll /data for mtime changes. Dev uses chokidar SSE above.
   useEffect(() => {
@@ -109,7 +109,7 @@ export function DataFolderWatcher() {
     void poll();
     const id = setInterval(() => void poll(), pollMs);
     return () => clearInterval(id);
-  }, [mergeFromDataFile]);
+  }, [ingestFile]);
 
   return null;
 }

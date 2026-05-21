@@ -22,7 +22,7 @@ export function BirdFlightMark({ size = 64, className }: MarkProps) {
       style={{ width: size, height: size }}
       aria-hidden
     >
-      <img
+      <Image
         src={LOGO_SRC}
         alt=""
         width={imgWidth}

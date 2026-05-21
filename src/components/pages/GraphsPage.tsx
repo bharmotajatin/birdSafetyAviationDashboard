@@ -53,16 +53,33 @@ function GraphsContent({ data }: { data: DashboardData }) {
     [data.incidents, filters],
   );
 
+  const grouped = useMemo(() => {
+    const byStation = filtered.reduce((map, inc) => {
+      const key = String(inc.station);
+      const group = map.get(key) ?? [];
+      group.push(inc);
+      map.set(key, group);
+      return map;
+    }, new Map<string, typeof filtered>());
+
+    const byType = filtered.reduce((map, inc) => {
+      const key = normalizeIncidentType(inc.incidentType);
+      const group = map.get(key) ?? [];
+      group.push(inc);
+      map.set(key, group);
+      return map;
+    }, new Map<string, typeof filtered>());
+
+    return { byStation, byType };
+  }, [filtered]);
+
   const derived = useMemo(() => {
     const stations = [...STATIONS];
-    const stationTotals = stations.map((s) => filtered.filter((i) => i.station === s).length);
-    const types = [...new Set(filtered.map((i) => normalizeIncidentType(i.incidentType)))]
-      .map((label) => ({
-        label,
-        value: filtered.filter(
-          (i) => normalizeIncidentType(i.incidentType) === label,
-        ).length,
-      }))
+    const stationTotals = stations.map(
+      (s) => grouped.byStation.get(s)?.length ?? 0,
+    );
+    const types = [...grouped.byType.entries()]
+      .map(([label, list]) => ({ label, value: list.length }))
       .sort((a, b) => b.value - a.value);
 
     const monthMap = new Map<string, { total: number; catA: number; label: string }>();
@@ -97,7 +114,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
       : 4.4;
 
     return { stations, stationTotals, types, months, timeline, avgMonthly };
-  }, [filtered]);
+  }, [filtered, grouped]);
 
   const filterKey = `${filters.year}-${filters.month}-${filters.station}-${filters.department}-${filters.category}`;
   const monthOptions = ["All", ...data.monthlyTrend.map((m) => m.monthKey)];

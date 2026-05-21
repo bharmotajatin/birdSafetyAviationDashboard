@@ -7,7 +7,18 @@ import { mergeIncidents } from "@/lib/merge-incidents";
 import { parseWorkbook } from "@/lib/parse";
 import type { WorkbookValidation } from "@/lib/validation/workbook";
 import { validateWorkbook } from "@/lib/validation/workbook";
+import { useErrorMonitorStore } from "@/lib/stores/error-monitor-store";
 import type { DashboardData, GraphFilters, Incident } from "@/lib/types";
+
+function verifyMonthlyTrendIntegrity(data: DashboardData) {
+  const monthlySum = data.monthlyTrend.reduce((sum, point) => sum + point.total, 0);
+  if (monthlySum !== data.incidents.length) {
+    useErrorMonitorStore.getState().addError({
+      source: "buildMonthlyTrend",
+      message: `Monthly bucket total (${monthlySum}) does not match incident count (${data.incidents.length}).`,
+    });
+  }
+}
 
 type MergeResult = {
   added: number;
@@ -96,6 +107,7 @@ async function executePendingLoad(
   if (pending.kind === "upload") {
     const buffer = await pending.file.arrayBuffer();
     const data = parseWorkbook(buffer);
+    verifyMonthlyTrendIntegrity(data);
     set({
       workbookLoaded: true,
       fileName: pending.file.name,
@@ -115,6 +127,7 @@ async function executePendingLoad(
 
   if (!state.data) {
     const data = rebuildDashboard(incoming, payload.contributingFromSheet);
+    verifyMonthlyTrendIntegrity(data);
     set({
       workbookLoaded: true,
       fileName: payload.fileName,
@@ -130,6 +143,7 @@ async function executePendingLoad(
 
   const { merged, added, skipped } = mergeIncidents(state.data.incidents, incoming);
   const data = rebuildDashboard(merged, payload.contributingFromSheet);
+  verifyMonthlyTrendIntegrity(data);
 
   set({
     workbookLoaded: true,
@@ -189,6 +203,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       }
 
       const data = parseWorkbook(buffer);
+      verifyMonthlyTrendIntegrity(data);
       set({
         workbookLoaded: true,
         fileName: file.name,

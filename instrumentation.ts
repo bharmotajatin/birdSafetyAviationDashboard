@@ -1,10 +1,12 @@
 /**
- * Keep this file Edge-safe. Next.js evaluates instrumentation for both Node and
- * Edge in dev; do not import fs, path, chokidar, or @/server/* here.
- *
- * The /data folder watcher is started from src/app/api/data/watch/route.ts
- * (runtime: nodejs) when DataFolderWatcher connects via EventSource in development.
+ * Edge-safe instrumentation entry. Node-only shutdown hooks live in
+ * instrumentation.node.ts and are loaded only when NEXT_RUNTIME is nodejs.
  */
 export async function register() {
-  // No-op
+  if (process.env.NEXT_RUNTIME !== "nodejs") {
+    return;
+  }
+
+  const { registerNodeShutdown } = await import("./instrumentation.node");
+  await registerNodeShutdown();
 }

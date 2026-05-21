@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChartOptions } from "chart.js";
 import { formatDataLabelValue } from "@/lib/chart-setup";
 import type { Context } from "chartjs-plugin-datalabels";
@@ -52,12 +52,12 @@ export function readChartTheme(): ChartTheme {
 }
 
 export function useChartTheme(): ChartTheme {
-  const [revision, setRevision] = useState(0);
+  const [theme, setTheme] = useState<ChartTheme>(readChartTheme);
 
   useEffect(() => {
     const root = document.documentElement;
     const observer = new MutationObserver(() => {
-      setRevision((n) => n + 1);
+      setTheme(readChartTheme());
     });
     observer.observe(root, {
       attributes: true,
@@ -66,10 +66,11 @@ export function useChartTheme(): ChartTheme {
     return () => observer.disconnect();
   }, []);
 
-  return useMemo(() => readChartTheme(), [revision]);
+  return theme;
 }
 
-function tooltipPlugins(_theme: ChartTheme) {
+function tooltipPlugins(theme: ChartTheme) {
+  void theme;
   return {
     tooltip: {
       backgroundColor: "#1a2a5e",
@@ -123,7 +124,6 @@ export function buildHorizontalDataLabelStyles(theme: ChartTheme) {
 }
 
 export function buildChartDefaults(theme: ChartTheme): ChartOptions {
-  const dataLabels = buildDataLabelStyles(theme);
   return {
     responsive: true,
     maintainAspectRatio: false,
