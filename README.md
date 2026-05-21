@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bird Flight Services — Safety Incident Dashboard
 
-## Getting Started
+Production-ready Next.js dashboard for **DEL_INCIDENT_FIXED.xlsx** (62 incidents, 6 workbook sheets).
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router) · TypeScript · Tailwind CSS v4
+- Zustand · xlsx · Framer Motion · Chart.js · Recharts
+
+## Quick start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and upload your Excel workbook.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm run start   # production
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project structure (Phase 1)
 
-## Learn More
+```
+src/
+├── app/                    # Routes: / + 5 sheet pages
+├── components/
+│   ├── layout/             # Header, SheetTabs, DashboardShell
+│   ├── dashboard/          # Upload, SheetDashboard, ML, tables
+│   ├── cards/              # ClickableMetricCard
+│   ├── charts/             # TrendLine, HorizontalBar, Donut
+│   └── ui/                 # shadcn components
+└── lib/
+    ├── stores/             # Zustand
+    ├── ml/                 # Analysis pipeline
+    ├── brand.ts            # Navy + gold tokens
+    ├── animations.ts
+    ├── parse-workbook.ts
+    └── sheets.ts           # Route ↔ Excel sheet map
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Implementation guide
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See **[COMPLETE_NEXTJS_IMPLEMENTATION_GUIDE.md](./COMPLETE_NEXTJS_IMPLEMENTATION_GUIDE.md)** for phased setup (Phases 1–8).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Brand
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Token | Value |
+|-------|--------|
+| Navy | `#1a2a5e` |
+| Gold | `#d4af37` |
