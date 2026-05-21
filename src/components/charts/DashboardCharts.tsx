@@ -12,7 +12,6 @@ import {
   buildRadarChartOptions,
   buildTooltipOnlyChartOptions,
   useChartTheme,
-  type ChartTheme,
 } from "@/lib/chart-theme";
 import { buildTreemapNodes } from "@/lib/treemap-theme";
 import type { Context } from "chartjs-plugin-datalabels";
@@ -24,8 +23,6 @@ import {
   STATUS_COLORS,
 } from "@/lib/constants";
 import { EmptyState } from "@/components/ui/dashboard-primitives";
-
-export { TreemapChart } from "@/components/charts/TreemapChart";
 
 function hasChartData(values: number[]) {
   return values.length > 0 && values.some((v) => v > 0);

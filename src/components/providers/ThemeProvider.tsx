@@ -25,17 +25,12 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof document !== "undefined") {
-      return document.documentElement.classList.contains("dark") ? "dark" : "light";
-    }
-    return "light";
-  });
+  const [theme, setThemeState] = useState<ThemeMode>("light");
 
   useEffect(() => {
     const mode = resolveThemeMode();
-    setThemeState(mode);
     applyThemeToDocument(mode);
+    queueMicrotask(() => setThemeState(mode));
   }, []);
 
   const setTheme = useCallback((mode: ThemeMode) => {

@@ -10,7 +10,7 @@ import {
   Lock,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BirdFlightLogo } from "@/components/dashboard/BirdFlightLogo";
 import { UploadExcelIcon } from "@/components/dashboard/UploadExcelIcon";
 import { UploadLoadingRadar } from "@/components/dashboard/UploadLoadingRadar";
@@ -132,7 +132,11 @@ function SheetValidationStrip({
 export function UploadScreen() {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [dragOver, setDragOver] = useState(false);
   const {
     loadWorkbook,
@@ -143,10 +147,6 @@ export function UploadScreen() {
     dismissValidation,
     workbookLoaded,
   } = useDashboardStore();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const onFile = async (file: File | undefined) => {
     if (!file || isLoading) return;

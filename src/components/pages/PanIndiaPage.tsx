@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { PageDataRequired } from "@/components/layout/PageDataRequired";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
 import { AnimatedKpiCard } from "@/components/ui/AnimatedKpiCard";

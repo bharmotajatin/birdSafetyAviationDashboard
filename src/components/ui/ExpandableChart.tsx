@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2, X } from "lucide-react";
 
@@ -19,8 +19,6 @@ interface ExpandableChartProps {
   chart?: React.ReactNode;
   height?: number;
   previewHeight?: number;
-  /** Treemap layout: chart fills modal height; table scrolls separately. */
-  chartVariant?: "default" | "treemap";
   insight: string;
   caption: string;
   columns: ExpandableChartColumn[];
@@ -128,7 +126,6 @@ export function ExpandableChart({
   chart,
   height = 400,
   previewHeight = 220,
-  chartVariant = "default",
   insight,
   caption,
   columns,
@@ -136,17 +133,9 @@ export function ExpandableChart({
 }: ExpandableChartProps) {
   const [open, setOpen] = useState(false);
 
-  const chartFactory = useMemo(() => {
-    if (renderChart) return renderChart;
-    if (chart) return () => chart;
-    return () => null;
-  }, [renderChart, chart]);
-
-  const modalChartHeight = useMemo(() => {
-    if (chartVariant === "treemap") return "fill" as const;
-    const labelCount = Math.max(rows.length, 6);
-    return Math.min(720, Math.max(height, labelCount * 40 + 100));
-  }, [rows.length, height, chartVariant]);
+  const chartFactory = renderChart ?? (chart ? () => chart : () => null);
+  const labelCount = Math.max(rows.length, 6);
+  const modalChartHeight = Math.min(720, Math.max(height, labelCount * 40 + 100));
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -260,13 +249,7 @@ export function ExpandableChart({
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div
-                  className={
-                    chartVariant === "treemap"
-                      ? "flex min-h-[min(55vh,520px)] flex-1 flex-col px-4 py-4 sm:px-6"
-                      : "shrink-0 px-4 py-4 sm:px-6"
-                  }
-                >
+                <div className="shrink-0 px-4 py-4 sm:px-6">
                   <ChartSlot
                     factory={chartFactory}
                     instanceKey={`${slug}-modal`}
@@ -283,13 +266,7 @@ export function ExpandableChart({
                   {caption}
                 </p>
 
-                <div
-                  className={
-                    chartVariant === "treemap"
-                      ? "min-h-0 max-h-[28vh] shrink-0 overflow-y-auto px-5 pb-6 sm:px-6"
-                      : "min-h-0 max-h-[32vh] overflow-y-auto px-5 pb-6 sm:px-6"
-                  }
-                >
+                <div className="min-h-0 max-h-[32vh] overflow-y-auto px-5 pb-6 sm:px-6">
                   <DataTable title={title} columns={columns} rows={rows} />
                 </div>
               </div>

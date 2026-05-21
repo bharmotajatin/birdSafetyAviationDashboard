@@ -1,31 +1,4 @@
 import { BirdFlightMark } from "@/components/dashboard/BirdFlightLogo";
-import { cn } from "@/lib/utils";
-
-type KpiCardProps = {
-  label: string;
-  value: string | number;
-  tone?: "default" | "red" | "amber" | "green" | "grey" | "gold";
-  subtitle?: string;
-};
-
-const toneClasses = {
-  default: "theme-text",
-  red: "text-red-500",
-  amber: "text-amber-500",
-  green: "text-green-500",
-  grey: "theme-text-muted",
-  gold: "text-[var(--brand-gold)]",
-};
-
-export function KpiCard({ label, value, tone = "default", subtitle }: KpiCardProps) {
-  return (
-    <article className="glass-card p-4">
-      <p className="text-sm theme-text-muted">{label}</p>
-      <p className={cn("mt-1 text-2xl font-bold", toneClasses[tone])}>{value}</p>
-      {subtitle ? <p className="mt-1 text-xs theme-text-muted">{subtitle}</p> : null}
-    </article>
-  );
-}
 
 export function PageHeader({
   title,
@@ -42,23 +15,6 @@ export function PageHeader({
         <p className="mt-1 text-sm theme-text-muted">{subtitle}</p>
       </div>
     </header>
-  );
-}
-
-export function ChartCard({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cn("glass-card p-4", className)}>
-      <h3 className="mb-3 text-sm font-semibold text-[#d4af37]">{title}</h3>
-      <div className="h-[280px]">{children}</div>
-    </section>
   );
 }
 

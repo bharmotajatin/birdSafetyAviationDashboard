@@ -744,7 +744,7 @@ export function GridScan(props: GridScanProps) {
 
   useEffect(() => {
     if (!enableWebcam) {
-      setModelsReady(false);
+      queueMicrotask(() => setModelsReady(false));
       return;
     }
     let canceled = false;
@@ -932,7 +932,7 @@ function smoothDampVec2(
   const x = omega * deltaTime;
   const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
 
-  let change = current.clone().sub(target);
+  const change = current.clone().sub(target);
   const originalTo = target.clone();
 
   const maxChange = maxSpeed * smoothTime;
