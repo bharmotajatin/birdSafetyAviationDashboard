@@ -17,6 +17,7 @@ import { InjurySourceModal } from "@/components/pattern-analysis/InjurySourceMod
 import { AiAnalysisReportView } from "@/components/AiAnalysisReportView";
 import { SafetyReportPDF } from "@/components/SafetyReportPDF";
 import { IncidentDetailDrawer } from "@/components/dashboard/IncidentDetailDrawer";
+import { usePageData } from "@/components/layout/PageDataRequired";
 import {
   CountChart,
   GroupedBarChart,
@@ -528,8 +529,6 @@ function readInitialAnalysis(): SafetyAnalysisResult | null {
 function PatternAnalysisContent({ data }: { data: DashboardData }) {
   const router = useRouter();
   const incidents = useMemo(() => data.incidents ?? [], [data.incidents]);
-  const fileName = useDashboardStore((state) => state.fileName);
-  const clearWorkbook = useDashboardStore((state) => state.clearWorkbook);
   const selectedIncident = useDashboardStore((state) => state.selectedIncident);
   const setSelectedIncident = useDashboardStore((state) => state.setSelectedIncident);
   const [activeTab, setActiveTab] = useState<PatternTab>("all");
@@ -759,16 +758,6 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
       clearBfsStorage();
     }
   }, []);
-
-  const clearAllData = useCallback(() => {
-    clearWorkbook();
-    setAnalysisResult(null);
-    setAiReportRaw("");
-    setAnalysisParseError(null);
-    setAiFollowUps([]);
-    setLastUpdated(null);
-    autoAnalysisStarted.current = false;
-  }, [clearWorkbook]);
 
   const summaryCards = [
     {
@@ -1001,42 +990,7 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
         </button>
       </motion.div>
 
-      {lastUpdated && fileName ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "8px 16px",
-            background: "#F0F7FF",
-            border: "1px solid #B8D4F0",
-            borderRadius: "8px",
-            marginBottom: "16px",
-            fontSize: "12px",
-            color: "#2C5F8A",
-          }}
-        >
-          <span>
-            📂 Showing data from <strong>{fileName}</strong>
-            {" · "}Last updated {formatTimeAgo(lastUpdated)}
-          </span>
-          <button
-            type="button"
-            onClick={clearAllData}
-            style={{
-              background: "none",
-              border: "1px solid #B8D4F0",
-              borderRadius: "6px",
-              padding: "3px 10px",
-              fontSize: "11px",
-              color: "#2C5F8A",
-              cursor: "pointer",
-            }}
-          >
-            Clear & Upload New File
-          </button>
-        </div>
-      ) : null}
+      {lastUpdated ? <p className="text-xs text-slate-500">Pattern report last updated {formatTimeAgo(lastUpdated)}</p> : null}
 
       {alerts.length > 0 ? (
         <div className="space-y-2">
@@ -1648,18 +1602,8 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
 }
 
 export function PatternAnalysisPage() {
-  const data = useDashboardStore((state) => state.data);
-  const hydrateFromStorage = useDashboardStore((state) => state.hydrateFromStorage);
-  const [storageReady, setStorageReady] = useState(false);
-
-  useEffect(() => {
-    if (!data) {
-      hydrateFromStorage();
-    }
-    setStorageReady(true);
-  }, [data, hydrateFromStorage]);
-
-  if (!storageReady) {
+  const data = usePageData();
+  if (!data) {
     return (
       <div className="space-y-6">
         <LoadingSkeleton />
@@ -1683,12 +1627,12 @@ export function PatternAnalysisPage() {
                 Incident Pattern Intelligence
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Upload a workbook to begin pattern analysis.
+                No incident data is available yet.
               </p>
             </div>
           </div>
         </div>
-        <EmptyState message="Upload a workbook to begin pattern analysis." />
+        <EmptyState message="No incidents match the current filters." />
       </div>
     );
   }
