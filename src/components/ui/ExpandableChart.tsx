@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface ExpandableChartColumn {
   key: string;
@@ -19,6 +20,10 @@ interface ExpandableChartProps {
   chart?: React.ReactNode;
   height?: number;
   previewHeight?: number;
+  /** Max pixel height for chart in the expanded modal (keeps table visible). */
+  maxModalChartHeight?: number;
+  /** "compact" = narrower modal for pie/doughnut; "wide" = full width for bar charts. */
+  modalVariant?: "compact" | "wide";
   insight: string;
   caption: string;
   columns: ExpandableChartColumn[];
@@ -36,7 +41,7 @@ function DataTable({
 }) {
   return (
     <div className="data-table-wrap overflow-x-auto">
-      <table className="data-table w-full min-w-[480px] text-xs">
+      <table className="data-table w-full min-w-[360px] text-xs">
         <thead>
           <tr>
             {columns.map((col) => (
@@ -126,6 +131,8 @@ export function ExpandableChart({
   chart,
   height = 400,
   previewHeight = 220,
+  maxModalChartHeight = 340,
+  modalVariant = "wide",
   insight,
   caption,
   columns,
@@ -135,7 +142,10 @@ export function ExpandableChart({
 
   const chartFactory = renderChart ?? (chart ? () => chart : () => null);
   const labelCount = Math.max(rows.length, 6);
-  const modalChartHeight = Math.min(720, Math.max(height, labelCount * 40 + 100));
+  const modalChartHeight = Math.min(
+    maxModalChartHeight,
+    Math.min(720, Math.max(height, labelCount * 40 + 100)),
+  );
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -221,7 +231,10 @@ export function ExpandableChart({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.97 }}
               transition={{ type: "spring", stiffness: 320, damping: 30 }}
-              className="chart-modal flex max-h-[95vh] w-full flex-col overflow-hidden rounded-t-2xl border theme-border bg-[var(--background)] shadow-2xl sm:max-w-7xl sm:rounded-2xl"
+              className={cn(
+                "chart-modal flex max-h-[95vh] w-full flex-col overflow-hidden rounded-t-2xl border theme-border bg-[var(--background)] shadow-2xl sm:rounded-2xl",
+                modalVariant === "compact" ? "chart-modal--compact" : "chart-modal--wide",
+              )}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="theme-bg-navy flex shrink-0 items-center justify-between px-5 py-4 sm:px-6">
@@ -248,8 +261,13 @@ export function ExpandableChart({
                 </button>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="shrink-0 px-4 py-4 sm:px-6">
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+                <div
+                  className={cn(
+                    "shrink-0 px-4 py-3 sm:px-6",
+                    modalVariant === "compact" && "mx-auto w-full max-w-lg",
+                  )}
+                >
                   <ChartSlot
                     factory={chartFactory}
                     instanceKey={`${slug}-modal`}
@@ -262,11 +280,11 @@ export function ExpandableChart({
                   <p className="text-xs leading-relaxed theme-text-secondary">{insight}</p>
                 </div>
 
-                <p className="theme-text-muted shrink-0 px-5 pt-4 pb-2 text-xs italic sm:px-6">
+                <p className="theme-text-muted shrink-0 px-5 pt-3 pb-2 text-xs italic sm:px-6">
                   {caption}
                 </p>
 
-                <div className="min-h-0 max-h-[32vh] overflow-y-auto px-5 pb-6 sm:px-6">
+                <div className="shrink-0 px-5 pb-6 sm:px-6">
                   <DataTable title={title} columns={columns} rows={rows} />
                 </div>
               </div>

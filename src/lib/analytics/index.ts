@@ -375,7 +375,8 @@ export function filterIncidents(
     }
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      const hay = `${incident.title} ${incident.ghrNumber}`.toLowerCase();
+      const hay =
+        `${incident.title} ${incident.ghrNumber} ${incident.incidentType} ${incident.station}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (filters.dateFrom && incident.date) {

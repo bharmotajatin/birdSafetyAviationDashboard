@@ -23,10 +23,25 @@ import {
   STATUS_BREAKDOWN_ORDER,
   STATUS_COLORS,
 } from "@/lib/constants";
-import { EmptyState } from "@/components/ui/dashboard-primitives";
-
 function hasChartData(values: number[]) {
   return values.length > 0 && values.some((v) => v > 0);
+}
+
+function ChartNoData() {
+  return (
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#94a3b8",
+        fontSize: 13,
+      }}
+    >
+      No data available
+    </div>
+  );
 }
 
 function ChartSurface({
@@ -44,41 +59,60 @@ function ChartSurface({
 function defaultRadialChartSize(
   labelCount: number,
   containerHeight?: number,
+  containerWidth?: number,
   legendVariant: "grid" | "wrap" = "grid",
 ) {
   const compact =
     labelCount > 8 ? 96 : labelCount > 6 ? 108 : labelCount > 4 ? 118 : 132;
 
-  if (!containerHeight || containerHeight < 200) return compact;
+  if (!containerHeight || containerHeight < 120) return compact;
 
-  const cols = legendVariant === "wrap" ? 4 : 3;
-  const legendRows = Math.ceil(labelCount / cols);
-  const rowH = legendVariant === "wrap" ? 22 : 26;
-  const legendBudget = Math.min(
-    legendVariant === "wrap" ? 150 : 130,
-    legendRows * rowH + 10,
-  );
-  const fromHeight = Math.floor(containerHeight - legendBudget - 12);
-  return Math.min(168, Math.max(compact, fromHeight));
+  const fromHeight = Math.floor(containerHeight - 8);
+  const legendWidthFrac = legendVariant === "wrap" ? 0.5 : 0.44;
+  const fromWidth = containerWidth
+    ? Math.min(220, Math.floor(containerWidth * (1 - legendWidthFrac) - 16))
+    : fromHeight;
+
+  const maxCap =
+    containerHeight >= 400
+      ? 260
+      : containerHeight >= 300
+        ? 220
+        : containerHeight >= 240
+          ? 190
+          : 168;
+
+  return Math.min(maxCap, fromHeight, fromWidth, Math.max(compact, Math.min(fromHeight, fromWidth)));
 }
 
-/** Keeps pie/doughnut sized for the card with legend below (no overlap). */
+/** Pie/doughnut: chart left, legend right. */
+function radialCenterFontSize(chartSize: number) {
+  if (chartSize >= 240) return "2.25rem";
+  if (chartSize >= 200) return "1.75rem";
+  if (chartSize >= 160) return "1.5rem";
+  return "1.25rem";
+}
+
 function RadialChartLayout({
   chart,
   legend,
   labelCount,
   centerOverlay,
+  centerText,
+  centerTextColor,
   legendVariant = "grid",
 }: {
   chart: ReactNode;
   legend: ReactNode;
   labelCount: number;
   centerOverlay?: ReactNode;
+  centerText?: string;
+  centerTextColor?: string;
   legendVariant?: "grid" | "wrap";
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [chartSize, setChartSize] = useState(() =>
-    defaultRadialChartSize(labelCount, undefined, legendVariant),
+    defaultRadialChartSize(labelCount, undefined, undefined, legendVariant),
   );
 
   useEffect(() => {
@@ -86,7 +120,14 @@ function RadialChartLayout({
     if (!el) return;
 
     const update = () => {
-      setChartSize(defaultRadialChartSize(labelCount, el.clientHeight, legendVariant));
+      setChartSize(
+        defaultRadialChartSize(
+          labelCount,
+          el.clientHeight,
+          el.clientWidth,
+          legendVariant,
+        ),
+      );
     };
 
     update();
@@ -98,18 +139,31 @@ function RadialChartLayout({
   return (
     <div
       ref={rootRef}
-      className="flex h-full min-h-0 flex-col items-stretch gap-1.5 overflow-hidden"
+      className="flex h-full min-h-0 flex-row items-center gap-3 overflow-hidden sm:gap-4"
     >
       <div
-        className="relative mx-auto shrink-0"
+        className="relative shrink-0"
         style={{ width: chartSize, height: chartSize }}
       >
         <ChartSurface className="absolute inset-0 overflow-hidden rounded-md">
           {chart}
         </ChartSurface>
-        {centerOverlay}
+        {centerOverlay ??
+          (centerText ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span
+                className="font-bold"
+                style={{
+                  color: centerTextColor,
+                  fontSize: radialCenterFontSize(chartSize),
+                }}
+              >
+                {centerText}
+              </span>
+            </div>
+          ) : null)}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-y-auto overscroll-contain py-1">
         {legend}
       </div>
     </div>
@@ -139,8 +193,8 @@ export function CountChart({
 }: CountChartProps) {
   const theme = useChartTheme();
 
-  if (!hasChartData(values)) {
-    return <EmptyState message="No data for this chart with current filters." />;
+  if (!labels?.length || !values?.length || !hasChartData(values)) {
+    return <ChartNoData />;
   }
 
   const palette =
@@ -207,6 +261,7 @@ export function CountChart({
       values={values}
       colors={palette}
       variant={legendVariant}
+      layout="aside"
     />
   );
 
@@ -227,18 +282,8 @@ export function CountChart({
         labelCount={labels.length}
         chart={<Doughnut data={data} options={radialOptions as ChartOptions<"doughnut">} />}
         legend={legend}
-        centerOverlay={
-          centerText ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span
-                className="text-xl font-bold sm:text-2xl"
-                style={{ color: theme.centerText }}
-              >
-                {centerText}
-              </span>
-            </div>
-          ) : null
-        }
+        centerText={centerText}
+        centerTextColor={theme.centerText}
       />
     );
   }
@@ -313,8 +358,8 @@ export function RadarMetricChart({
 }: RadarChartProps) {
   const theme = useChartTheme();
 
-  if (!hasChartData(values)) {
-    return <EmptyState message="No data for this chart with current filters." />;
+  if (!labels?.length || !values?.length || !hasChartData(values)) {
+    return <ChartNoData />;
   }
 
   const palette = resolvePalette(labels, colors);
@@ -372,8 +417,8 @@ export function SingleSeriesAreaChart({
   const theme = useChartTheme();
   const chartOptions = buildChartDefaults(theme);
 
-  if (labels.length === 0) {
-    return <EmptyState message="No trend data available." />;
+  if (!labels?.length) {
+    return <ChartNoData />;
   }
 
   return (
@@ -422,8 +467,8 @@ export function ComboTrendChart({ labels, totals, catA, rollingAvg }: ComboTrend
   const theme = useChartTheme();
   const chartOptions = buildChartDefaults(theme);
 
-  if (labels.length === 0) {
-    return <EmptyState message="No monthly trend data available." />;
+  if (!labels?.length) {
+    return <ChartNoData />;
   }
 
   const data = {
@@ -483,7 +528,7 @@ export function ComboTrendChart({ labels, totals, catA, rollingAvg }: ComboTrend
 
 type GroupedBarProps = {
   labels: string[];
-  series: { label: string; data: number[]; color: string }[];
+  series: { label: string; data: number[]; color: string; barColors?: string[] }[];
 };
 
 export function GroupedBarChart({ labels, series }: GroupedBarProps) {
@@ -491,8 +536,8 @@ export function GroupedBarChart({ labels, series }: GroupedBarProps) {
   const chartOptions = buildChartDefaults(theme);
   const dataLabels = buildNonZeroBarDataLabels(theme);
 
-  if (labels.length === 0) {
-    return <EmptyState message="No station comparison data." />;
+  if (!labels?.length) {
+    return <ChartNoData />;
   }
 
   const data = {
@@ -500,7 +545,7 @@ export function GroupedBarChart({ labels, series }: GroupedBarProps) {
     datasets: series.map((s) => ({
       label: s.label,
       data: s.data,
-      backgroundColor: s.color,
+      backgroundColor: s.barColors ?? s.color,
       datalabels: dataLabels,
     })),
   };
@@ -552,8 +597,8 @@ export function AreaTrendChart({ labels, totals, catA, averageLine }: AreaTrendP
   const theme = useChartTheme();
   const chartOptions = buildChartDefaults(theme);
 
-  if (labels.length === 0) {
-    return <EmptyState message="No trend data for selected filters." />;
+  if (!labels?.length) {
+    return <ChartNoData />;
   }
 
   const data = {
@@ -625,8 +670,8 @@ export function StackedStatusBar({ labels, open, closed }: StackedBarProps) {
     display: (ctx: Context) => Number(ctx.dataset.data[ctx.dataIndex]) > 0,
   };
 
-  if (labels.length === 0) {
-    return <EmptyState message="No open/closed breakdown available." />;
+  if (!labels?.length) {
+    return <ChartNoData />;
   }
 
   const data = {
@@ -667,7 +712,7 @@ export function RiskScatterChart({ points }: { points: ScatterPoint[] }) {
   const active = points.filter((p) => p.x > 0 || p.y > 0);
 
   if (active.length === 0) {
-    return <EmptyState message="No risk scatter data — only DEL has incidents currently." />;
+    return <ChartNoData />;
   }
 
   const data = {
@@ -746,8 +791,8 @@ export function IncidentTimeline({
   const theme = useChartTheme();
   const chartOptions = buildChartDefaults(theme);
 
-  if (incidents.length === 0) {
-    return <EmptyState message="No timeline incidents for current filters." />;
+  if (!incidents?.length) {
+    return <ChartNoData />;
   }
 
   const categories = ["CAT-A", "CAT-B", "CAT-C", "CAT-D"];

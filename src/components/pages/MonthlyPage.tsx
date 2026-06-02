@@ -1,3 +1,4 @@
+// Filter-blank fix applied — see git commit fix/filter-blank-pages.
 "use client";
 
 import { motion } from "framer-motion";
@@ -6,13 +7,14 @@ import { PageHeader } from "@/components/ui/dashboard-primitives";
 import { AnimatedKpiCard } from "@/components/ui/AnimatedKpiCard";
 import { KpiCardGrid } from "@/components/ui/KpiCardGrid";
 import { ExpandableChart } from "@/components/ui/ExpandableChart";
+import { FilterContentShell } from "@/components/ui/FilterContentShell";
 import {
   ComboTrendChart,
   CountChart,
   SingleSeriesAreaChart,
   StatusBreakdownChart,
 } from "@/components/charts/DashboardCharts";
-import { fadeUp, scaleIn, stagger } from "@/lib/animations";
+import { fadeUp, stagger } from "@/lib/animations";
 import { CHART_DETAILS } from "@/lib/chart-details";
 import { CATEGORY_COLORS } from "@/lib/constants";
 import type { DashboardData } from "@/lib/types";
@@ -27,9 +29,14 @@ export function MonthlyPage() {
 
 function MonthlyContent({ data }: { data: DashboardData }) {
   const kpis = data.kpis;
-  const { monthlyTrend } = data;
+  const monthlyTrend = data.monthlyTrend ?? [];
   const details = CHART_DETAILS.monthly;
   const catAMonths = monthlyTrend.filter((m) => m.catA > 0);
+
+  const trendLabels = monthlyTrend.map((m) => m.label) ?? [];
+  const trendTotals = monthlyTrend.map((m) => m.total) ?? [];
+  const trendCatA = monthlyTrend.map((m) => m.catA) ?? [];
+  const trendRolling = monthlyTrend.map((m) => m.rollingAvg3) ?? [];
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible">
@@ -41,77 +48,97 @@ function MonthlyContent({ data }: { data: DashboardData }) {
       </motion.div>
 
       <KpiCardGrid columns={8}>
-        <AnimatedKpiCard index={0} label="Total Incidents" value={kpis.total} tone="gold" />
-        <AnimatedKpiCard index={1} label="Open" value={kpis.open} tone="red" />
-        <AnimatedKpiCard index={2} label="In Progress" value={kpis.inProgress} tone="amber" />
-        <AnimatedKpiCard index={3} label="Closed" value={kpis.closed} tone="green" />
-        <AnimatedKpiCard index={4} label="Pending" value={kpis.pending} tone="purple" />
-        <AnimatedKpiCard index={5} label="CAT-A Critical" value={kpis.catA} tone="red" />
-        <AnimatedKpiCard index={6} label="CAT-B High" value={kpis.catB} tone="amber" />
-        <AnimatedKpiCard index={7} label="CAT-C Medium" value={kpis.catC} tone="gold" />
+        <AnimatedKpiCard index={0} label="Total Incidents" value={kpis.total ?? 0} tone="gold" />
+        <AnimatedKpiCard index={1} label="Open" value={kpis.open ?? 0} tone="red" />
+        <AnimatedKpiCard index={2} label="In Progress" value={kpis.inProgress ?? 0} tone="amber" />
+        <AnimatedKpiCard index={3} label="Closed" value={kpis.closed ?? 0} tone="green" />
+        <AnimatedKpiCard index={4} label="Pending" value={kpis.pending ?? 0} tone="purple" />
+        <AnimatedKpiCard index={5} label="CAT-A Critical" value={kpis.catA ?? 0} tone="red" />
+        <AnimatedKpiCard index={6} label="CAT-B High" value={kpis.catB ?? 0} tone="amber" />
+        <AnimatedKpiCard index={7} label="CAT-C Medium" value={kpis.catC ?? 0} tone="gold" />
       </KpiCardGrid>
 
-      <motion.div variants={scaleIn} custom={8}>
-        <ExpandableChart
-          title="Monthly Combo Trend"
-          subtitle="Bars = total · Line = CAT-A · Dashed = 3-month rolling avg"
-          height={320}
-          renderChart={() => (
-            <ComboTrendChart
-              labels={monthlyTrend.map((m) => m.label)}
-              totals={monthlyTrend.map((m) => m.total)}
-              catA={monthlyTrend.map((m) => m.catA)}
-              rollingAvg={monthlyTrend.map((m) => m.rollingAvg3)}
-            />
-          )}
-          {...details.combo}
-        />
-      </motion.div>
-
-      <div className="my-6 grid gap-4 lg:grid-cols-2">
-        <motion.div variants={scaleIn} custom={9}>
+      <FilterContentShell transitionKey="monthly-charts" minHeight={400}>
+        <div>
           <ExpandableChart
-            title="Status Counts"
+            title="Monthly Combo Trend"
+            subtitle="Bars = total · Line = CAT-A · Dashed = 3-month rolling avg"
+            height={320}
             renderChart={() => (
-              <StatusBreakdownChart
-                open={kpis.open}
-                inProgress={kpis.inProgress}
-                pending={kpis.pending}
-                closed={kpis.closed}
+              <ComboTrendChart
+                labels={trendLabels}
+                totals={trendTotals}
+                catA={trendCatA}
+                rollingAvg={trendRolling}
               />
             )}
-            {...CHART_DETAILS.incidentLog.status}
+            {...details.combo}
           />
-        </motion.div>
-        <motion.div variants={scaleIn} custom={10}>
+        </div>
+
+        <div className="my-6 grid gap-4 lg:grid-cols-2">
+          <div>
+            <ExpandableChart
+              title="Status Counts"
+              renderChart={() => (
+                <StatusBreakdownChart
+                  open={kpis.open ?? 0}
+                  inProgress={kpis.inProgress ?? 0}
+                  pending={kpis.pending ?? 0}
+                  closed={kpis.closed ?? 0}
+                />
+              )}
+              {...CHART_DETAILS.incidentLog.status}
+            />
+          </div>
+          <div>
+            <ExpandableChart
+              title="Category Counts"
+              renderChart={() => (
+                <CountChart
+                  labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
+                  values={[kpis.catA ?? 0, kpis.catB ?? 0, kpis.catC ?? 0, kpis.catD ?? 0]}
+                  type="horizontal"
+                  colors={Object.values(CATEGORY_COLORS)}
+                />
+              )}
+              {...CHART_DETAILS.incidentLog.category}
+            />
+          </div>
+        </div>
+
+        <div>
           <ExpandableChart
-            title="Category Counts"
+            title="Status & Category Overview"
             renderChart={() => (
               <CountChart
-                labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
-                values={[kpis.catA, kpis.catB, kpis.catC, kpis.catD]}
+                labels={[
+                  "Closed",
+                  "Open",
+                  "In Progress",
+                  "Pending",
+                  "CAT-A",
+                  "CAT-B",
+                  "CAT-C",
+                  "CAT-D",
+                ]}
+                values={[
+                  kpis.closed ?? 0,
+                  kpis.open ?? 0,
+                  kpis.inProgress ?? 0,
+                  kpis.pending ?? 0,
+                  kpis.catA ?? 0,
+                  kpis.catB ?? 0,
+                  kpis.catC ?? 0,
+                  kpis.catD ?? 0,
+                ]}
                 type="horizontal"
-                colors={Object.values(CATEGORY_COLORS)}
               />
             )}
-            {...CHART_DETAILS.incidentLog.category}
+            {...details.statusCategory}
           />
-        </motion.div>
-      </div>
-
-      <motion.div variants={scaleIn} custom={11}>
-        <ExpandableChart
-          title="Status & Category Overview"
-          renderChart={() => (
-            <CountChart
-              labels={["Closed", "Open", "In Progress", "Pending", "CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
-              values={[kpis.closed, kpis.open, kpis.inProgress, kpis.pending, kpis.catA, kpis.catB, kpis.catC, kpis.catD]}
-              type="horizontal"
-            />
-          )}
-          {...details.statusCategory}
-        />
-      </motion.div>
+        </div>
+      </FilterContentShell>
 
       <motion.section variants={fadeUp} custom={12} className="glass-card interactive-card mb-6 mt-6 overflow-hidden">
         <div className="data-table-wrap overflow-auto">
@@ -156,7 +183,7 @@ function MonthlyContent({ data }: { data: DashboardData }) {
         </div>
       </motion.section>
 
-      <motion.div variants={scaleIn} custom={13}>
+      <div>
         <ExpandableChart
           title="CAT-A Monthly Focus"
           renderChart={() => (
@@ -175,7 +202,7 @@ function MonthlyContent({ data }: { data: DashboardData }) {
           ]}
           rows={catAMonths.map((m) => ({ Month: m.label, "CAT-A": m.catA }))}
         />
-      </motion.div>
+      </div>
     </motion.div>
   );
 }

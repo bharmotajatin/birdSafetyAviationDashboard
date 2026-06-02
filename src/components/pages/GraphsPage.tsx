@@ -1,12 +1,14 @@
+// Filter-blank fix applied — see git commit fix/filter-blank-pages.
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { useMemo } from "react";
+import { motion } from "framer-motion";
+import { useDeferredValue, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { IncidentDetailDrawer } from "@/components/dashboard/IncidentDetailDrawer";
 import { PageDataRequired } from "@/components/layout/PageDataRequired";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
 import { ExpandableChart } from "@/components/ui/ExpandableChart";
+import { FilterContentShell } from "@/components/ui/FilterContentShell";
 import {
   AreaTrendChart,
   CountChart,
@@ -20,7 +22,7 @@ import { filterIncidents } from "@/lib/analytics";
 import { normalizeIncidentType, isValidMonthKey, monthLabelFromKey } from "@/lib/parse/utils";
 import { DEPT_COLORS, STATIONS } from "@/lib/constants";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
-import type { DashboardData } from "@/lib/types";
+import type { DashboardData, GraphFilters } from "@/lib/types";
 
 const CATEGORY_ORDER = ["CAT-A", "CAT-B", "CAT-C", "CAT-D"];
 
@@ -40,38 +42,42 @@ function GraphsContent({ data }: { data: DashboardData }) {
   const selectedIncident = useDashboardStore((s) => s.selectedIncident);
   const setSelectedIncident = useDashboardStore((s) => s.setSelectedIncident);
   const details = CHART_DETAILS.graphs;
+  const [isPending, startTransition] = useTransition();
 
-  const filtered = useMemo(
-    () =>
-      filterIncidents(data.incidents, {
-        year: filters.year,
-        month: filters.month,
-        station: filters.station,
-        department: filters.department,
-        category: filters.category,
-      }),
-    [data.incidents, filters],
-  );
+  const incidents = useMemo(() => data.incidents ?? [], [data.incidents]);
+
+  const filteredIncidents = useMemo(() => {
+    if (!incidents.length) return [];
+    return filterIncidents(incidents, {
+      year: filters.year,
+      month: filters.month,
+      station: filters.station,
+      department: filters.department,
+      category: filters.category,
+    });
+  }, [incidents, filters]);
+
+  const deferredFiltered = useDeferredValue(filteredIncidents);
 
   const grouped = useMemo(() => {
-    const byStation = filtered.reduce((map, inc) => {
+    const byStation = deferredFiltered.reduce((map, inc) => {
       const key = String(inc.station);
       const group = map.get(key) ?? [];
       group.push(inc);
       map.set(key, group);
       return map;
-    }, new Map<string, typeof filtered>());
+    }, new Map<string, typeof deferredFiltered>());
 
-    const byType = filtered.reduce((map, inc) => {
+    const byType = deferredFiltered.reduce((map, inc) => {
       const key = normalizeIncidentType(inc.incidentType);
       const group = map.get(key) ?? [];
       group.push(inc);
       map.set(key, group);
       return map;
-    }, new Map<string, typeof filtered>());
+    }, new Map<string, typeof deferredFiltered>());
 
     return { byStation, byType };
-  }, [filtered]);
+  }, [deferredFiltered]);
 
   const derived = useMemo(() => {
     const stations = [...STATIONS];
@@ -83,7 +89,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
       .sort((a, b) => b.value - a.value);
 
     const monthMap = new Map<string, { total: number; catA: number; label: string }>();
-    filtered.forEach((incident) => {
+    deferredFiltered.forEach((incident) => {
       if (!isValidMonthKey(incident.monthKey)) return;
       const current = monthMap.get(incident.monthKey) ?? {
         total: 0,
@@ -96,7 +102,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
     });
     const months = [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-    const timeline = filtered
+    const timeline = deferredFiltered
       .filter((i) => i.date)
       .map((i) => ({
         id: i.id,
@@ -114,22 +120,31 @@ function GraphsContent({ data }: { data: DashboardData }) {
       : 4.4;
 
     return { stations, stationTotals, types, months, timeline, avgMonthly };
-  }, [filtered, grouped]);
+  }, [deferredFiltered, grouped]);
 
-  const filterKey = `${filters.year}-${filters.month}-${filters.station}-${filters.department}-${filters.category}`;
-  const monthOptions = ["All", ...data.monthlyTrend.map((m) => m.monthKey)];
+  const monthOptions = ["All", ...(data.monthlyTrend ?? []).map((m) => m.monthKey)];
 
   const showKpis = filters.station === "All" || filters.station === "DEL";
-  const catA = showKpis ? kpis.catA : filtered.filter((i) => i.category === "CAT-A").length;
-  const catB = showKpis ? kpis.catB : filtered.filter((i) => i.category === "CAT-B").length;
-  const catC = showKpis ? kpis.catC : filtered.filter((i) => i.category === "CAT-C").length;
-  const catD = showKpis ? kpis.catD : filtered.filter((i) => i.category === "CAT-D").length;
-  const open = showKpis ? kpis.open : filtered.filter((i) => i.status === "Open").length;
-  const inProgress = showKpis ? kpis.inProgress : filtered.filter((i) => i.status === "In Progress").length;
-  const closed = showKpis ? kpis.closed : filtered.filter((i) => i.status === "Closed").length;
-  const pending = showKpis ? kpis.pending : filtered.filter((i) => i.status === "Pending").length;
-  const ramp = showKpis ? kpis.ramp : filtered.filter((i) => i.department === "RAMP").length;
-  const gsd = showKpis ? kpis.gsd : filtered.filter((i) => i.department === "GSD").length;
+  const catA = showKpis ? kpis.catA : deferredFiltered.filter((i) => i.category === "CAT-A").length;
+  const catB = showKpis ? kpis.catB : deferredFiltered.filter((i) => i.category === "CAT-B").length;
+  const catC = showKpis ? kpis.catC : deferredFiltered.filter((i) => i.category === "CAT-C").length;
+  const catD = showKpis ? kpis.catD : deferredFiltered.filter((i) => i.category === "CAT-D").length;
+  const open = showKpis ? kpis.open : deferredFiltered.filter((i) => i.status === "Open").length;
+  const inProgress = showKpis
+    ? kpis.inProgress
+    : deferredFiltered.filter((i) => i.status === "In Progress").length;
+  const closed = showKpis ? kpis.closed : deferredFiltered.filter((i) => i.status === "Closed").length;
+  const pending = showKpis
+    ? kpis.pending
+    : deferredFiltered.filter((i) => i.status === "Pending").length;
+  const ramp = showKpis ? kpis.ramp : deferredFiltered.filter((i) => i.department === "RAMP").length;
+  const gsd = showKpis ? kpis.gsd : deferredFiltered.filter((i) => i.department === "GSD").length;
+
+  const applyFilter = (partial: Partial<GraphFilters>) => {
+    startTransition(() => {
+      setGraphFilters(partial);
+    });
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible">
@@ -145,44 +160,72 @@ function GraphsContent({ data }: { data: DashboardData }) {
         animate={{ opacity: 1, y: 0 }}
         className="glass-card interactive-card mb-6 grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5"
       >
-        <FilterSelect label="Year" value={filters.year} options={["All", "2025", "2026"]} onChange={(year) => setGraphFilters({ year: year as typeof filters.year })} />
-        <FilterSelect label="Month" value={filters.month} options={monthOptions} onChange={(month) => setGraphFilters({ month })} />
-        <FilterSelect label="Station" value={filters.station} options={["All", ...STATIONS]} onChange={(station) => setGraphFilters({ station })} />
-        <FilterSelect label="Department" value={filters.department} options={["All", "RAMP", "GSD", "CARGO"]} onChange={(department) => setGraphFilters({ department })} />
-        <FilterSelect label="Category" value={filters.category} options={["All", "CAT-A", "CAT-B", "CAT-C", "CAT-D"]} onChange={(category) => setGraphFilters({ category })} />
+        <FilterSelect
+          label="Year"
+          value={filters.year}
+          options={["All", "2025", "2026"]}
+          onChange={(year) => applyFilter({ year: year as GraphFilters["year"] })}
+        />
+        <FilterSelect
+          label="Month"
+          value={filters.month}
+          options={monthOptions}
+          onChange={(month) => applyFilter({ month })}
+        />
+        <FilterSelect
+          label="Station"
+          value={filters.station}
+          options={["All", ...STATIONS]}
+          onChange={(station) => applyFilter({ station })}
+        />
+        <FilterSelect
+          label="Department"
+          value={filters.department}
+          options={["All", "RAMP", "GSD", "CARGO"]}
+          onChange={(department) => applyFilter({ department })}
+        />
+        <FilterSelect
+          label="Category"
+          value={filters.category}
+          options={["All", "CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
+          onChange={(category) => applyFilter({ category })}
+        />
       </motion.div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={filterKey}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="grid gap-4 lg:grid-cols-2"
-        >
-          <motion.div variants={fadeUp} custom={0}>
+      <FilterContentShell
+        transitionKey="graphs-charts"
+        isPending={isPending}
+        minHeight={400}
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
             <ExpandableChart
               title="Station Incidents"
-              renderChart={() => <CountChart labels={derived.stations} values={derived.stationTotals} />}
+              renderChart={() => (
+                <CountChart
+                  labels={derived.stations ?? []}
+                  values={derived.stationTotals ?? []}
+                />
+              )}
               {...details.station}
             />
-          </motion.div>
-          <motion.div variants={fadeUp} custom={1}>
+          </div>
+          <div>
             <ExpandableChart
               title="Category Severity"
+              modalVariant="compact"
               renderChart={() => (
                 <CountChart
                   labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
                   values={[catA, catB, catC, catD]}
                   type="doughnut"
-                  centerText={String(filtered.length)}
+                  centerText={String(deferredFiltered.length)}
                 />
               )}
               {...details.category}
             />
-          </motion.div>
-          <motion.div variants={fadeUp} custom={2}>
+          </div>
+          <div>
             <ExpandableChart
               title="Incident Status"
               renderChart={() => (
@@ -195,8 +238,8 @@ function GraphsContent({ data }: { data: DashboardData }) {
               )}
               {...details.status}
             />
-          </motion.div>
-          <motion.div variants={fadeUp} custom={3}>
+          </div>
+          <div>
             <ExpandableChart
               title="Department Split"
               renderChart={() => (
@@ -209,47 +252,45 @@ function GraphsContent({ data }: { data: DashboardData }) {
               )}
               {...details.department}
             />
-          </motion.div>
-          <motion.div variants={fadeUp} custom={4}>
+          </div>
+          <div>
             <ExpandableChart
               title="Monthly Trend Area"
               renderChart={() => (
                 <AreaTrendChart
-                  labels={derived.months.map(([, m]) => m.label)}
-                  totals={derived.months.map(([, m]) => m.total)}
-                  catA={derived.months.map(([, m]) => m.catA)}
+                  labels={derived.months.map(([, m]) => m.label) ?? []}
+                  totals={derived.months.map(([, m]) => m.total) ?? []}
+                  catA={derived.months.map(([, m]) => m.catA) ?? []}
                   averageLine={Math.round(derived.avgMonthly * 10) / 10}
                 />
               )}
               {...details.monthlyArea}
             />
-          </motion.div>
-          <motion.div variants={fadeUp} custom={5}>
-            {/* Was: horizontal bar (incident type). Department Split already uses horizontal bar on this page — treemap ranks types by volume without a second horizontal count chart. */}
+          </div>
+          <div>
             <ExpandableChart
               title="Incident Type Frequency"
               renderChart={() => (
                 <RankedHorizontalBarChart
-                  labels={derived.types.map((t) => t.label)}
-                  values={derived.types.map((t) => t.value)}
+                  labels={derived.types.map((t) => t.label) ?? []}
+                  values={derived.types.map((t) => t.value) ?? []}
                 />
               )}
               {...details.typeFrequency}
             />
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
+          </div>
+        </div>
+      </FilterContentShell>
 
-      <motion.div variants={fadeUp} custom={6} className="mt-4">
-        {/* Was: bubble timeline. No second bubble on this page, but scatter gives fixed-size points for date×category positioning (clearer than variable-radius bubbles at dashboard scale). */}
+      <div className="mt-4">
         <ExpandableChart
           title="Incident Timeline"
           height={320}
           renderChart={() => (
             <IncidentTimeline
-              incidents={derived.timeline}
+              incidents={derived.timeline ?? []}
               onSelect={(id) => {
-                const incident = data.incidents.find((i) => i.id === id);
+                const incident = incidents.find((i) => i.id === id);
                 if (incident) setSelectedIncident(incident);
               }}
             />
@@ -262,14 +303,14 @@ function GraphsContent({ data }: { data: DashboardData }) {
             { key: "Date", label: "Date" },
             { key: "Category", label: "Category" },
           ]}
-          rows={derived.timeline.slice(0, 20).map((t) => ({
+          rows={(derived.timeline ?? []).slice(0, 20).map((t) => ({
             GHR: t.ghrNumber,
             Title: t.title,
             Date: t.dateLabel,
             Category: t.category,
           }))}
         />
-      </motion.div>
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <motion.button

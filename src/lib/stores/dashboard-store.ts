@@ -8,7 +8,18 @@ import { parseWorkbook } from "@/lib/parse";
 import type { WorkbookValidation } from "@/lib/validation/workbook";
 import { validateWorkbook } from "@/lib/validation/workbook";
 import { useErrorMonitorStore } from "@/lib/stores/error-monitor-store";
+import {
+  clearBfsStorage,
+  clearCorruptedBfsStorage,
+  loadFilenameFromStorage,
+  loadIncidentsFromStorage,
+  saveIncidentData,
+} from "@/lib/bfs-storage";
+import { createEmptyDashboardData } from "@/lib/empty-dashboard";
+import type { IncidentLogBotFilters } from "@/lib/safety-bot/incident-log-nav";
 import type { DashboardData, GraphFilters, Incident } from "@/lib/types";
+
+export { createEmptyDashboardData };
 
 function verifyMonthlyTrendIntegrity(data: DashboardData) {
   const monthlySum = data.monthlyTrend.reduce((sum, point) => sum + point.total, 0);
@@ -38,6 +49,7 @@ type DashboardState = {
   isLoading: boolean;
   error: string | null;
   selectedIncident: Incident | null;
+  botIncidentFilters: IncidentLogBotFilters | null;
   graphFilters: GraphFilters;
   validation: WorkbookValidation | null;
   validationLoadAnyway: boolean;
@@ -48,7 +60,10 @@ type DashboardState = {
   confirmValidationAndLoad: () => Promise<void>;
   dismissValidation: () => void;
   clearWorkbook: () => void;
+  hydrateFromStorage: () => boolean;
   setSelectedIncident: (incident: Incident | null) => void;
+  setBotFilter: (filter: Partial<IncidentLogBotFilters>) => void;
+  clearBotFilter: () => void;
   setGraphFilters: (filters: Partial<GraphFilters>) => void;
 };
 
@@ -75,6 +90,10 @@ function appendSourceName(current: string | null, next: string): string {
   if (!current) return next;
   if (current.includes(next)) return current;
   return `${current} + ${next}`;
+}
+
+function persistDashboardToStorage(fileName: string, data: DashboardData): void {
+  saveIncidentData(data.incidents, fileName);
 }
 
 async function fetchValidateFromData(fileName: string): Promise<WorkbookValidation> {
@@ -118,6 +137,7 @@ async function executePendingLoad(
       validationLoadAnyway: false,
       pendingLoad: null,
     });
+    persistDashboardToStorage(pending.file.name, data);
     return;
   }
 
@@ -138,6 +158,7 @@ async function executePendingLoad(
       validationLoadAnyway: false,
       pendingLoad: null,
     });
+    persistDashboardToStorage(payload.fileName, data);
     return { added: incoming.length, skipped: 0, fileName: payload.fileName };
   }
 
@@ -145,9 +166,10 @@ async function executePendingLoad(
   const data = rebuildDashboard(merged, payload.contributingFromSheet);
   verifyMonthlyTrendIntegrity(data);
 
+  const mergedFileName = appendSourceName(state.fileName, payload.fileName);
   set({
     workbookLoaded: true,
-    fileName: appendSourceName(state.fileName, payload.fileName),
+    fileName: mergedFileName,
     data,
     isLoading: false,
     error: null,
@@ -155,6 +177,7 @@ async function executePendingLoad(
     validationLoadAnyway: false,
     pendingLoad: null,
   });
+  persistDashboardToStorage(mergedFileName, data);
 
   return { added, skipped, fileName: payload.fileName };
 }
@@ -173,6 +196,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   isLoading: false,
   error: null,
   selectedIncident: null,
+  botIncidentFilters: null,
   graphFilters: defaultGraphFilters,
   validation: null,
   validationLoadAnyway: false,
@@ -213,6 +237,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         validation: validation.warningCount > 0 ? validation : null,
         pendingLoad: null,
       });
+      persistDashboardToStorage(file.name, data);
     } catch (err) {
       set({
         isLoading: false,
@@ -299,7 +324,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       isLoading: false,
     }),
 
-  clearWorkbook: () =>
+  clearWorkbook: () => {
+    clearBfsStorage();
     set({
       workbookLoaded: false,
       fileName: null,
@@ -307,13 +333,49 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       isLoading: false,
       error: null,
       selectedIncident: null,
+      botIncidentFilters: null,
       graphFilters: defaultGraphFilters,
       validation: null,
       validationLoadAnyway: false,
       pendingLoad: null,
-    }),
+    });
+  },
+
+  hydrateFromStorage: () => {
+    try {
+      const incidents = loadIncidentsFromStorage();
+      if (!incidents?.length) return false;
+
+      const fileName = loadFilenameFromStorage() ?? "Saved workbook";
+      const data = rebuildDashboard(incidents);
+      verifyMonthlyTrendIntegrity(data);
+
+      set({
+        workbookLoaded: true,
+        fileName,
+        data,
+        isLoading: false,
+        error: null,
+        validation: null,
+        validationLoadAnyway: false,
+        pendingLoad: null,
+      });
+      return true;
+    } catch (error) {
+      console.warn("Storage restore failed:", error);
+      clearCorruptedBfsStorage();
+      return false;
+    }
+  },
 
   setSelectedIncident: (incident) => set({ selectedIncident: incident }),
+
+  setBotFilter: (filter) =>
+    set((state) => ({
+      botIncidentFilters: { ...(state.botIncidentFilters ?? {}), ...filter },
+    })),
+
+  clearBotFilter: () => set({ botIncidentFilters: null }),
 
   setGraphFilters: (filters) =>
     set((state) => ({
@@ -322,5 +384,5 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 }));
 
 export function useDashboardData(): DashboardData | null {
-  return useDashboardStore((s) => s.data);
+  return useDashboardStore((s) => s.data ?? null);
 }

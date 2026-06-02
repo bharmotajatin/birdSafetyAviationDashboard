@@ -1,3 +1,4 @@
+// Filter-blank fix applied — see git commit fix/filter-blank-pages.
 "use client";
 
 import { motion } from "framer-motion";
@@ -10,8 +11,7 @@ import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { ExpandableChart } from "@/components/ui/ExpandableChart";
 import { RiskBadge } from "@/components/ui/badges";
 import { CountChart, RiskScatterChart, StackedStatusBar } from "@/components/charts/DashboardCharts";
-import { FlippableCard } from "@/components/ui/FlippableCard";
-import { fadeUp, scaleIn, stagger } from "@/lib/animations";
+import { fadeUp, stagger } from "@/lib/animations";
 import { CHART_DETAILS } from "@/lib/chart-details";
 import { calcRiskScore } from "@/lib/analytics";
 import { CATEGORY_COLORS, RISK_COLORS, STATIONS } from "@/lib/constants";
@@ -111,56 +111,52 @@ function StationWiseContent({ data }: { data: DashboardData }) {
       </motion.div>
 
       <div className="station-card-grid">
-        {sortedStations.map((s, i) => (
-          <motion.div key={`card-${s.station}`} variants={scaleIn} custom={i} className="h-full min-w-0">
-            <FlippableCard
-              className="h-full"
-              innerClassName={`glass-card interactive-card station-card-shell station-risk-card--${s.riskLevel} h-full w-full`}
-              front={
-                <div className="station-card-content">
-                  <div className="station-card-header">
-                    <p className="station-card-code">{s.station}</p>
-                    <RiskBadge level={s.riskLevel} compact />
-                  </div>
-                  <div className="station-card-body">
-                    <p className="station-card-score">
-                      <AnimatedCounter value={s.riskScore} />
-                    </p>
-                    <div className="station-cat-badges">
-                      {(["CAT-A", "CAT-B", "CAT-C", "CAT-D"] as const).map((cat, idx) => {
-                        const counts = [s.catA, s.catB, s.catC, s.catD];
-                        return (
-                          <span
-                            key={cat}
-                            className="station-cat-badge"
-                            style={{
-                              backgroundColor: `${CATEGORY_COLORS[cat]}33`,
-                              color: CATEGORY_COLORS[cat],
-                            }}
-                          >
-                            {cat.split("-")[1]}:{counts[idx]}
-                          </span>
-                        );
-                      })}
-                    </div>
-                    <p className="station-card-footer">
-                      Closed {s.closed} · Open {s.open}
-                    </p>
-                  </div>
+        {sortedStations.map((s) => (
+          <div key={`card-${s.station}`} className="h-full min-w-0">
+            <div
+              className={cn(
+                "glass-card interactive-card station-card-shell h-full w-full",
+                `station-risk-card--${s.riskLevel}`,
+              )}
+            >
+              <div className="station-card-content">
+                <div className="station-card-header">
+                  <p className="station-card-code">{s.station}</p>
+                  <RiskBadge level={s.riskLevel} compact />
                 </div>
-              }
-              back={
-                <div className="flip-back-content">
-                  {`${s.station} breakdown\nTotal: ${s.total}\nCAT-A: ${s.catA} | CAT-B: ${s.catB}\nCAT-C: ${s.catC} | CAT-D: ${s.catD}\nClosure: ${s.closureRate}%`}
+                <div className="station-card-body">
+                  <p className="station-card-score">
+                    <AnimatedCounter value={s.riskScore} />
+                  </p>
+                  <div className="station-cat-badges">
+                    {(["CAT-A", "CAT-B", "CAT-C", "CAT-D"] as const).map((cat, idx) => {
+                      const counts = [s.catA, s.catB, s.catC, s.catD];
+                      return (
+                        <span
+                          key={cat}
+                          className="station-cat-badge"
+                          style={{
+                            backgroundColor: `${CATEGORY_COLORS[cat]}33`,
+                            color: CATEGORY_COLORS[cat],
+                          }}
+                        >
+                          {cat.split("-")[1]}:{counts[idx]}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="station-card-footer">
+                    Closed {s.closed} · Open {s.open}
+                  </p>
                 </div>
-              }
-            />
-          </motion.div>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <motion.div variants={scaleIn} custom={12}>
+        <div>
           <ExpandableChart
             title="Risk Score Ranking"
             renderChart={() => (
@@ -173,8 +169,8 @@ function StationWiseContent({ data }: { data: DashboardData }) {
             )}
             {...details.riskScore}
           />
-        </motion.div>
-        <motion.div variants={scaleIn} custom={13}>
+        </div>
+        <div>
           <ExpandableChart
             title="Open vs Closed"
             renderChart={() => (
@@ -186,8 +182,8 @@ function StationWiseContent({ data }: { data: DashboardData }) {
             )}
             {...details.openClosed}
           />
-        </motion.div>
-        <motion.div variants={scaleIn} custom={14} className="lg:col-span-2">
+        </div>
+        <div className="lg:col-span-2">
           {/* Was: bubble (risk vs volume). Risk Score Ranking already uses horizontal bar for risk score on this page — scatter plot separates volume×risk relationship without a second bubble/bars for risk score alone. */}
           <ExpandableChart
             title="Risk vs Volume"
@@ -206,7 +202,7 @@ function StationWiseContent({ data }: { data: DashboardData }) {
             columns={details.riskScore.columns}
             rows={details.riskScore.rows}
           />
-        </motion.div>
+        </div>
       </div>
 
       <motion.section variants={fadeUp} custom={15} className="glass-card interactive-card overflow-hidden">

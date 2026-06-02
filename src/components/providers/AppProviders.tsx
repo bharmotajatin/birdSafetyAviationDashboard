@@ -1,6 +1,7 @@
 "use client";
 
 import { Toaster } from "react-hot-toast";
+import { BfsStorageHydrator } from "@/components/layout/BfsStorageHydrator";
 import { DataFolderWatcher } from "@/components/layout/DataFolderWatcher";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ErrorMonitorButton } from "@/components/ui/ErrorMonitorButton";
@@ -8,6 +9,7 @@ import { ErrorMonitorButton } from "@/components/ui/ErrorMonitorButton";
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
+      <BfsStorageHydrator />
       {children}
       <DataFolderWatcher />
       <ErrorMonitorButton />

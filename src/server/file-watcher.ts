@@ -18,6 +18,7 @@ dataWatchEmitter.setMaxListeners(50);
 import type { FSWatcher } from "chokidar";
 
 let watcherStarted = false;
+let shutdownHooksRegistered = false;
 let activeWatcher: FSWatcher | null = null;
 
 const recentEmit = new Map<string, number>();
@@ -67,6 +68,15 @@ export async function startDataFolderWatcher(): Promise<void> {
   activeWatcher.on("change", (fp: string) => notify(fp, "change"));
 
   console.info(`[data-watcher] Watching ${dataDir} for Excel workbooks`);
+
+  if (!shutdownHooksRegistered) {
+    shutdownHooksRegistered = true;
+    const shutdown = () => {
+      void stopDataFolderWatcher();
+    };
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+  }
 }
 
 export async function stopDataFolderWatcher(): Promise<void> {

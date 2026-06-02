@@ -19,7 +19,7 @@ export function ErrorMonitorButton() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`error-monitor-fab fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border px-4 py-2.5 shadow-lg transition ${
+        className={`error-monitor-fab fixed bottom-6 left-6 z-50 flex items-center gap-2 rounded-full border px-4 py-2.5 shadow-lg transition ${
           healthy
             ? "border-emerald-400/50 bg-emerald-600/95 text-white"
             : "border-red-400/60 bg-red-600/95 text-white animate-pulse"
@@ -42,7 +42,7 @@ export function ErrorMonitorButton() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
-            className="fixed bottom-20 right-6 z-50 w-[min(92vw,22rem)] rounded-xl border theme-border bg-[var(--background)] p-4 shadow-2xl"
+              className="fixed bottom-20 left-6 z-50 w-[min(92vw,22rem)] rounded-xl border theme-border bg-[var(--background)] p-4 shadow-2xl"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-sm font-semibold theme-text">Error Monitor</p>

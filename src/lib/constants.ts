@@ -1,3 +1,5 @@
+import { GitMerge, type LucideIcon } from "lucide-react";
+
 export const STATIONS = [
   "CJB",
   "COK",
@@ -96,11 +98,16 @@ export const SHEET_CONFIG = {
   },
 } as const;
 
-export const ROUTES = [
+export const ROUTES: ReadonlyArray<{
+  href: string;
+  label: string;
+  icon?: LucideIcon;
+}> = [
   { href: "/incident-log", label: "Incident Log" },
   { href: "/pan-india", label: "Pan India" },
   { href: "/station-analysis", label: "Station Analysis" },
   { href: "/station-wise", label: "Station-Wise" },
   { href: "/monthly", label: "Monthly" },
   { href: "/graphs", label: "Graphs" },
+  { href: "/pattern-analysis", label: "Patterns", icon: GitMerge },
 ] as const;

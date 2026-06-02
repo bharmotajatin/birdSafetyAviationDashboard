@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AppProviders } from "@/components/providers/AppProviders";
 import { ThemeScript } from "@/components/providers/ThemeScript";
+import { SafetyBot } from "@/components/ui/SafetyBot";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,7 +28,10 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased"
       >
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          {children}
+          <SafetyBot />
+        </AppProviders>
       </body>
     </html>
   );

@@ -6,6 +6,8 @@ type RadialChartLegendProps = {
   colors: string[];
   /** Default grid (compact). Use "wrap" for Pan India incident-types pie only. */
   variant?: "grid" | "wrap";
+  /** "aside" = vertical stack beside chart; "below" = grid under chart. */
+  layout?: "below" | "aside";
 };
 
 export function RadialChartLegend({
@@ -13,8 +15,41 @@ export function RadialChartLegend({
   values,
   colors,
   variant = "grid",
+  layout = "below",
 }: RadialChartLegendProps) {
   const total = values.reduce((sum, v) => sum + (Number(v) || 0), 0) || 1;
+
+  if (layout === "aside") {
+    return (
+      <div className="flex w-full flex-col gap-2">
+        {labels.map((label, index) => {
+          const count = values[index] ?? 0;
+          const pct = Math.round((count / total) * 1000) / 10;
+          return (
+            <span
+              key={`${label}-${index}`}
+              className="inline-flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs"
+              style={{
+                borderColor: "var(--legend-chip-border)",
+                backgroundColor: "var(--legend-chip-bg)",
+              }}
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ backgroundColor: colors[index] }}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 truncate font-medium theme-text-secondary">
+                {label}
+              </span>
+              <span className="tabular-nums theme-text-muted">{count}</span>
+              <span className="tabular-nums font-medium text-[var(--brand-gold)]">{pct}%</span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (variant === "wrap") {
     return (

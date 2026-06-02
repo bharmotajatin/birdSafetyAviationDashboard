@@ -1,19 +1,21 @@
+// Filter-blank fix applied — see git commit fix/filter-blank-pages.
 "use client";
 
 import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { PageDataRequired } from "@/components/layout/PageDataRequired";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
 import { AnimatedKpiCard } from "@/components/ui/AnimatedKpiCard";
 import { KpiCardGrid } from "@/components/ui/KpiCardGrid";
 import { ExpandableChart } from "@/components/ui/ExpandableChart";
+import { FilterContentShell } from "@/components/ui/FilterContentShell";
 import {
   ComboTrendChart,
   CountChart,
   RadarMetricChart,
   RankedHorizontalBarChart,
 } from "@/components/charts/DashboardCharts";
-import { fadeUp, scaleIn, stagger } from "@/lib/animations";
+import { fadeUp, stagger } from "@/lib/animations";
 import { CHART_DETAILS } from "@/lib/chart-details";
 import { buildMonthlyTrendForIncidents } from "@/lib/analytics";
 import { normalizeIncidentType } from "@/lib/parse/utils";
@@ -29,16 +31,18 @@ export function StationAnalysisPage() {
 }
 
 function StationAnalysisContent({ data }: { data: DashboardData }) {
-  const [station, setStation] = useState("DEL");
+  const [selectedStation, setSelectedStation] = useState<string>("DEL");
+  const [isPending, startTransition] = useTransition();
   const details = CHART_DETAILS.stationAnalysis;
 
-  const stationIncidents = useMemo(
-    () => data.incidents.filter((i) => i.station === station),
-    [data.incidents, station],
-  );
+  const scopedIncidents = useMemo(() => {
+    const incidents = data.incidents ?? [];
+    if (!incidents.length) return [];
+    return incidents.filter((i) => i.station === selectedStation);
+  }, [data.incidents, selectedStation]);
 
   const scoped = useMemo(() => {
-    const incidents = stationIncidents;
+    const incidents = scopedIncidents;
     let ramp = 0;
     let gsd = 0;
     let closed = 0;
@@ -118,7 +122,16 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
         closed: entry.closed,
       })),
     };
-  }, [stationIncidents]);
+  }, [scopedIncidents]);
+
+  const typeLabels = scoped.types.map((t) => t.label) ?? [];
+  const typeValues = scoped.types.map((t) => t.value) ?? [];
+  const monthlyLabels = scoped.monthly.map((m) => m.label) ?? [];
+  const monthlyTotals = scoped.monthly.map((m) => m.total) ?? [];
+  const monthlyCatA = scoped.monthly.map((m) => m.catA) ?? [];
+  const monthlyRolling = scoped.monthly.map((m) => m.rollingAvg3) ?? [];
+  const factorLabels = scoped.factors.map((f) => f.label) ?? [];
+  const factorValues = scoped.factors.map((f) => f.value) ?? [];
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible">
@@ -131,8 +144,12 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
 
       <motion.div variants={fadeUp} custom={1} className="mb-6">
         <select
-          value={station}
-          onChange={(e) => setStation(e.target.value)}
+          value={selectedStation}
+          onChange={(e) => {
+            startTransition(() => {
+              setSelectedStation(e.target.value);
+            });
+          }}
           className="theme-input rounded-md px-3 py-2 text-sm"
         >
           {STATIONS.map((s) => (
@@ -143,89 +160,106 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
         </select>
       </motion.div>
 
-      <KpiCardGrid>
-        <AnimatedKpiCard index={0} label="Total Incidents" value={scoped.total} tone="gold" />
-        <AnimatedKpiCard index={1} label="RAMP Department" value={scoped.ramp} />
-        <AnimatedKpiCard index={2} label="GSD Department" value={scoped.gsd} />
-        <AnimatedKpiCard index={3} label="CAT-A Critical" value={scoped.catA} tone="red" />
-        <AnimatedKpiCard index={4} label="Closure Rate" value={scoped.closureRate} tone="green" suffix="%" decimals={1} />
-        <AnimatedKpiCard index={5} label="Avg / Month" value={data.avgIncidentsPerMonth} decimals={1} />
-      </KpiCardGrid>
+      <FilterContentShell transitionKey={selectedStation} isPending={isPending} minHeight={400}>
+        <KpiCardGrid>
+          <AnimatedKpiCard index={0} label="Total Incidents" value={scoped.total} tone="gold" />
+          <AnimatedKpiCard index={1} label="RAMP Department" value={scoped.ramp} />
+          <AnimatedKpiCard index={2} label="GSD Department" value={scoped.gsd} />
+          <AnimatedKpiCard index={3} label="CAT-A Critical" value={scoped.catA} tone="red" />
+          <AnimatedKpiCard
+            index={4}
+            label="Closure Rate"
+            value={scoped.closureRate}
+            tone="green"
+            suffix="%"
+            decimals={1}
+          />
+          <AnimatedKpiCard
+            index={5}
+            label="Avg / Month"
+            value={data.avgIncidentsPerMonth ?? 0}
+            decimals={1}
+          />
+        </KpiCardGrid>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <motion.div variants={scaleIn} custom={6}>
-          <ExpandableChart
-            title="Department Split"
-            subtitle="RAMP vs GSD"
-            renderChart={() => <CountChart labels={["RAMP", "GSD"]} values={[scoped.ramp, scoped.gsd]} type="doughnut" colors={[DEPT_COLORS.RAMP, DEPT_COLORS.GSD]} />}
-            {...details.department}
-          />
-        </motion.div>
-        <motion.div variants={scaleIn} custom={7}>
-          <ExpandableChart
-            title="Category Distribution"
-            renderChart={() => (
-              <CountChart
-                labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
-                values={[scoped.catA, scoped.catB, scoped.catC, scoped.catD]}
-                type="horizontal"
-                colors={Object.values(CATEGORY_COLORS)}
-              />
-            )}
-            {...CHART_DETAILS.incidentLog.category}
-          />
-        </motion.div>
-        <motion.div variants={scaleIn} custom={8}>
-          {/* Was: vertical bar (incident type counts). Category Distribution already uses horizontal bar for count-by-label on this page — treemap for types avoids two bar charts showing categorical frequency. */}
-          <ExpandableChart
-            title="Incident Types Ranked"
-            renderChart={() => (
-              <RankedHorizontalBarChart
-                labels={scoped.types.map((t) => t.label)}
-                values={scoped.types.map((t) => t.value)}
-              />
-            )}
-            {...details.typesRanked}
-          />
-        </motion.div>
-        <motion.div variants={scaleIn} custom={9} className="lg:col-span-2">
-          <ExpandableChart
-            title="Monthly Trend"
-            height={300}
-            renderChart={() => (
-              <ComboTrendChart
-                labels={scoped.monthly.map((m) => m.label)}
-                totals={scoped.monthly.map((m) => m.total)}
-                catA={scoped.monthly.map((m) => m.catA)}
-                rollingAvg={scoped.monthly.map((m) => m.rollingAvg3)}
-              />
-            )}
-            {...details.monthly}
-          />
-        </motion.div>
-        {scoped.factors.length > 0 ? (
-          <motion.div variants={scaleIn} custom={10}>
-            {/* Was: horizontal bar (factor counts). Category Distribution already uses horizontal bar on this page — radar compares factor weights without duplicating horizontal bar + count dimension. */}
+        <div className="mb-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div>
             <ExpandableChart
-              title="Contributing Factors"
+              title="Department Split"
+              subtitle="RAMP vs GSD"
               renderChart={() => (
-                <RadarMetricChart
-                  labels={scoped.factors.map((f) => f.label)}
-                  values={scoped.factors.map((f) => f.value)}
-                  datasetLabel="Incidents"
+                <CountChart
+                  labels={["RAMP", "GSD"]}
+                  values={[scoped.ramp, scoped.gsd]}
+                  type="doughnut"
+                  colors={[DEPT_COLORS.RAMP, DEPT_COLORS.GSD]}
                 />
               )}
-              insight="Contributing factor categories from incident records at this station."
-              caption="Count of incidents tagged with each factor category."
-              columns={[
-                { key: "Factor", label: "Factor" },
-                { key: "Count", label: "Count", align: "right" },
-              ]}
-              rows={scoped.factors.map((f) => ({ Factor: f.label, Count: f.value }))}
+              modalVariant="compact"
+              {...details.department}
             />
-          </motion.div>
-        ) : null}
-      </div>
+          </div>
+          <div>
+            <ExpandableChart
+              title="Category Distribution"
+              renderChart={() => (
+                <CountChart
+                  labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
+                  values={[scoped.catA, scoped.catB, scoped.catC, scoped.catD]}
+                  type="horizontal"
+                  colors={Object.values(CATEGORY_COLORS)}
+                />
+              )}
+              {...CHART_DETAILS.incidentLog.category}
+            />
+          </div>
+          <div>
+            <ExpandableChart
+              title="Incident Types Ranked"
+              renderChart={() => (
+                <RankedHorizontalBarChart labels={typeLabels} values={typeValues} />
+              )}
+              {...details.typesRanked}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <ExpandableChart
+              title="Monthly Trend"
+              height={300}
+              renderChart={() => (
+                <ComboTrendChart
+                  labels={monthlyLabels}
+                  totals={monthlyTotals}
+                  catA={monthlyCatA}
+                  rollingAvg={monthlyRolling}
+                />
+              )}
+              {...details.monthly}
+            />
+          </div>
+          {scoped.factors.length > 0 ? (
+            <div>
+              <ExpandableChart
+                title="Contributing Factors"
+                renderChart={() => (
+                  <RadarMetricChart
+                    labels={factorLabels}
+                    values={factorValues}
+                    datasetLabel="Incidents"
+                  />
+                )}
+                insight="Contributing factor categories from incident records at this station."
+                caption="Count of incidents tagged with each factor category."
+                columns={[
+                  { key: "Factor", label: "Factor" },
+                  { key: "Count", label: "Count", align: "right" },
+                ]}
+                rows={scoped.factors.map((f) => ({ Factor: f.label, Count: f.value }))}
+              />
+            </div>
+          ) : null}
+        </div>
+      </FilterContentShell>
 
       <motion.section variants={fadeUp} custom={11} className="glass-card interactive-card overflow-hidden">
         <div className="data-table-wrap overflow-auto">
@@ -244,19 +278,27 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
               </tr>
             </thead>
             <tbody>
-              {scoped.breakdown.map((row, index) => (
-                <tr key={`${row.incidentType}-${index}`}>
-                  <td>{row.incidentType}</td>
-                  <td>{row.count}</td>
-                  <td>{row.pct}%</td>
-                  <td>{row.catA}</td>
-                  <td>{row.catB}</td>
-                  <td>{row.catC}</td>
-                  <td>{row.catD}</td>
-                  <td>{row.open}</td>
-                  <td>{row.closed}</td>
+              {scoped.breakdown.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-sm text-[#94a3b8]">
+                    No incident types recorded for {selectedStation} in this period
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                scoped.breakdown.map((row, index) => (
+                  <tr key={`${row.incidentType}-${index}`}>
+                    <td>{row.incidentType}</td>
+                    <td>{row.count}</td>
+                    <td>{row.pct}%</td>
+                    <td>{row.catA}</td>
+                    <td>{row.catB}</td>
+                    <td>{row.catC}</td>
+                    <td>{row.catD}</td>
+                    <td>{row.open}</td>
+                    <td>{row.closed}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
