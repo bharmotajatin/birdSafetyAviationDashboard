@@ -67,7 +67,9 @@ export async function startDataFolderWatcher(): Promise<void> {
   activeWatcher.on("add", (fp: string) => notify(fp, "add"));
   activeWatcher.on("change", (fp: string) => notify(fp, "change"));
 
-  console.info(`[data-watcher] Watching ${dataDir} for Excel workbooks`);
+  if (process.env.NODE_ENV === "development") {
+    console.info(`[data-watcher] Watching ${dataDir} for Excel workbooks`);
+  }
 
   if (!shutdownHooksRegistered) {
     shutdownHooksRegistered = true;

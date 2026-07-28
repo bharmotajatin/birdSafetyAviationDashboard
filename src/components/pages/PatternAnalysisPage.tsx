@@ -45,7 +45,6 @@ import {
 import { CATEGORY_COLORS } from "@/lib/constants";
 import { normalizeIncidentType } from "@/lib/parse/utils";
 import {
-  clearBfsStorage,
   formatTimeAgo,
   hoursSinceLastUpdated,
   loadAnalysisFromStorage,
@@ -299,6 +298,7 @@ function buildSimilarityTarget(query: string, data: DashboardData): Incident {
     brief: query,
     rootCause: "",
     correctiveAction: "",
+    immediateAction: "",
     location: "",
     time: "",
     personInvolved: "",
@@ -747,18 +747,6 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
 
   const safetyReportData = analysisResult;
 
-  useEffect(() => {
-    try {
-      const savedAnalysis = loadAnalysisFromStorage();
-      if (savedAnalysis) setAnalysisResult(savedAnalysis);
-      const savedDate = loadLastUpdatedFromStorage();
-      if (savedDate) setLastUpdated(savedDate);
-    } catch (error) {
-      console.warn("Storage restore failed:", error);
-      clearBfsStorage();
-    }
-  }, []);
-
   const summaryCards = [
     {
       label: "Recurring Patterns Found",
@@ -888,6 +876,7 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
           });
           setAnalysisResult(report);
           saveAnalysisResult(report);
+          setLastUpdated(new Date());
           setAnalysisParseError(null);
           setAiFollowUps([]);
         } else {
@@ -963,7 +952,10 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
     if (loadAnalysisFromStorage()) return;
 
     autoAnalysisStarted.current = true;
-    void runAiReport("Generate the structured safety report using the exact 8 sections.", "report");
+    const timer = window.setTimeout(() => {
+      void runAiReport("Generate the structured safety report using the exact 8 sections.", "report");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [analysisResult, incidents.length, runAiReport]);
 
   return (

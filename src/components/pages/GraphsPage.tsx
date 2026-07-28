@@ -58,6 +58,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
   }, [incidents, filters]);
 
   const deferredFiltered = useDeferredValue(filteredIncidents);
+  const isFilterPending = isPending || deferredFiltered !== filteredIncidents;
 
   const grouped = useMemo(() => {
     const byStation = deferredFiltered.reduce((map, inc) => {
@@ -194,7 +195,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
 
       <FilterContentShell
         transitionKey="graphs-charts"
-        isPending={isPending}
+        isPending={isFilterPending}
         minHeight={400}
       >
         <div className="grid gap-4 lg:grid-cols-2">
@@ -346,6 +347,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        suppressHydrationWarning
         className="theme-input mt-1 block w-full rounded-md px-3 py-2 text-sm"
       >
         {options.map((opt, index) => (

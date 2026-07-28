@@ -1,4 +1,13 @@
-import { GitMerge, type LucideIcon } from "lucide-react";
+import {
+  BarChart2,
+  Building,
+  Calendar,
+  FileText,
+  GitMerge,
+  Map,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 
 export const STATIONS = [
   "CJB",
@@ -49,6 +58,7 @@ export const RISK_COLORS = {
   HIGH: "#ef4444",
   MEDIUM: "#f59e0b",
   LOW: "#22c55e",
+  CRITICAL: "#991b1b",
 } as const;
 
 export const CHART_PALETTE = [
@@ -66,7 +76,12 @@ export const CHART_PALETTE = [
 export const SHEET_CONFIG = {
   incidentLog: {
     names: [/incident\s*log/i],
+    /** 1-based Excel row; detectHeaderRow converts to 0-index (row 4 → index 3). */
     headerRow: 4,
+  },
+  analysisDashboard: {
+    names: [/analysis\s*dashboard/i],
+    kpiRow: 4,
   },
   stationAnalysis: {
     names: [/station\s*analysis/i],
@@ -103,11 +118,11 @@ export const ROUTES: ReadonlyArray<{
   label: string;
   icon?: LucideIcon;
 }> = [
-  { href: "/incident-log", label: "Incident Log" },
-  { href: "/pan-india", label: "Pan India" },
-  { href: "/station-analysis", label: "Station Analysis" },
-  { href: "/station-wise", label: "Station-Wise" },
-  { href: "/monthly", label: "Monthly" },
-  { href: "/graphs", label: "Graphs" },
+  { href: "/incident-log", label: "Incident Log", icon: FileText },
+  { href: "/pan-india", label: "Pan India", icon: Map },
+  { href: "/station-analysis", label: "Station Analysis", icon: BarChart2 },
+  { href: "/station-wise", label: "Station-Wise", icon: Building },
+  { href: "/monthly", label: "Monthly", icon: Calendar },
+  { href: "/graphs", label: "Graphs", icon: TrendingUp },
   { href: "/pattern-analysis", label: "Patterns", icon: GitMerge },
 ] as const;

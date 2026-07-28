@@ -1,5 +1,12 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { DashboardGate } from "@/components/layout/DashboardGate";
+import { IncidentLogPage } from "@/components/pages/IncidentLogPage";
 
 export default function Page() {
-  redirect("/incidents");
+  return (
+    <DashboardGate>
+      <IncidentLogPage />
+    </DashboardGate>
+  );
 }

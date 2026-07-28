@@ -11,9 +11,11 @@ export const EMPTY_KPIS: DashboardKpis = {
   catC: 0,
   catD: 0,
   closureRate: 0,
+  riskScore: 0,
   ramp: 0,
   gsd: 0,
   nearMiss: 0,
+  acDamage: 0,
   staffInjuries: 0,
 };
 

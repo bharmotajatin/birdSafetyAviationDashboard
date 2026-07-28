@@ -22,11 +22,15 @@ export function safeSetStorage(key: string, value: string): void {
     localStorage.setItem(key, value);
   } catch (error) {
     if (!isQuotaError(error)) {
-      console.warn("Storage save failed:", error);
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Storage save failed:", error);
+      }
       return;
     }
 
-    console.warn("Storage full, saving reduced payload");
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Storage full, saving reduced payload");
+    }
     if (key === BFS_STORAGE_KEYS.incidents) {
       try {
         const incidents = JSON.parse(value) as Incident[];
@@ -35,7 +39,9 @@ export function safeSetStorage(key: string, value: string): void {
           JSON.stringify(incidents.slice(0, INCIDENT_CAP)),
         );
       } catch (parseError) {
-        console.warn("Storage save failed after trim:", parseError);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Storage save failed after trim:", parseError);
+        }
       }
     }
   }
@@ -65,7 +71,9 @@ export function saveIncidentData(incidents: Incident[], filename: string): void 
     safeSetStorage(BFS_STORAGE_KEYS.filename, filename);
     safeSetStorage(BFS_STORAGE_KEYS.lastUpdated, new Date().toISOString());
   } catch (error) {
-    console.warn("Storage save failed:", error);
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Storage save failed:", error);
+    }
   }
 }
 
@@ -73,7 +81,9 @@ export function saveAnalysisResult(result: SafetyAnalysisResult): void {
   try {
     safeSetStorage(BFS_STORAGE_KEYS.analysis, JSON.stringify(result));
   } catch (error) {
-    console.warn("Analysis storage save failed:", error);
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Analysis storage save failed:", error);
+    }
   }
 }
 

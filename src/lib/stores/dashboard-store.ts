@@ -60,6 +60,8 @@ type DashboardState = {
   confirmValidationAndLoad: () => Promise<void>;
   dismissValidation: () => void;
   clearWorkbook: () => void;
+  /** Alias for clearWorkbook — used by "Change file". */
+  reset: () => void;
   hydrateFromStorage: () => boolean;
   setSelectedIncident: (incident: Incident | null) => void;
   setBotFilter: (filter: Partial<IncidentLogBotFilters>) => void;
@@ -341,6 +343,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     });
   },
 
+  reset: () => {
+    get().clearWorkbook();
+  },
+
   hydrateFromStorage: () => {
     try {
       const incidents = loadIncidentsFromStorage();
@@ -362,7 +368,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       });
       return true;
     } catch (error) {
-      console.warn("Storage restore failed:", error);
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Storage restore failed:", error);
+      }
       clearCorruptedBfsStorage();
       return false;
     }

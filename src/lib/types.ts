@@ -2,7 +2,7 @@ import type { StationCode } from "./constants";
 
 export type Category = "CAT-A" | "CAT-B" | "CAT-C" | "CAT-D";
 export type Status = "Open" | "In Progress" | "Closed" | "Pending";
-export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
+export type RiskLevel = "HIGH" | "MEDIUM" | "LOW" | "CRITICAL";
 
 export type Incident = {
   id: string;
@@ -19,6 +19,7 @@ export type Incident = {
   brief: string;
   rootCause: string;
   correctiveAction: string;
+  immediateAction: string;
   location: string;
   time: string;
   personInvolved: string;
@@ -78,9 +79,11 @@ export type DashboardKpis = {
   catD: number;
   staffInjuries: number;
   nearMiss: number;
+  acDamage: number;
   ramp: number;
   gsd: number;
   closureRate: number;
+  riskScore: number;
 };
 
 export type IncidentTypeBreakdown = {

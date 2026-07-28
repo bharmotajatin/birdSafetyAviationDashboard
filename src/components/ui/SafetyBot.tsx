@@ -322,7 +322,7 @@ export function SafetyBot() {
     window.setTimeout(() => setIsProcessing(false), 120);
   };
 
-  const handleSend = async (overrideQuery?: string) => {
+  const handleSend = useCallback(async (overrideQuery?: string) => {
     const query = (overrideQuery ?? input).trim();
     if (!query || !data) return;
     if (!overrideQuery) setInput("");
@@ -424,7 +424,7 @@ export function SafetyBot() {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [contextNote, data, fileName, graphFilters, input, messages, pathname, pushPair]);
 
   useEffect(() => {
     const onBotSubmit = (event: Event) => {

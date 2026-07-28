@@ -50,7 +50,14 @@ const INCIDENT_ALIASES = {
     "event type",
     "classification",
   ],
-  department: ["department", "dept", "dept.", "department name", "division"],
+  department: [
+    "department involved",
+    "department",
+    "dept",
+    "dept.",
+    "department name",
+    "division",
+  ],
   status: ["status", "current status", "incident status", "case status"],
   station: [
     "station",
@@ -77,7 +84,13 @@ const INCIDENT_ALIASES = {
     "action taken",
     "corrective measure",
   ],
-  location: ["location", "area", "bay", "place", "exact location"],
+  immediateAction: [
+    "immediate action",
+    "immediate action taken",
+    "immediate actions",
+    "initial action",
+  ],
+  location: ["location of incident", "location", "area", "bay", "place", "exact location"],
   time: ["time", "incident time", "occurrence time", "time of incident"],
   personInvolved: [
     "person involved",
@@ -121,13 +134,17 @@ export function parseIncidentLog(sheets: { name: string; rows: unknown[][] }[]):
     const ghr = getField(row, INCIDENT_ALIASES.ghrNumber);
     if (!title && !ghr) continue;
 
+    const serialRaw = getField(row, INCIDENT_ALIASES.serialNo);
+    const serialParsed = Number(String(serialRaw).replace(/[^0-9.-]/g, ""));
+    // Skip header/footer/summary rows where S.No. is not a real number
+    if (!serialRaw || !Number.isFinite(serialParsed) || serialParsed <= 0) continue;
+
     const rawDate = getRawField(
       Object.fromEntries(headers.map((header: string, index: number) => [header, rawRow[index]])),
       INCIDENT_ALIASES.date,
     );
     const date = parseFlexibleDate(rawDate);
-    const serialRaw = getField(row, INCIDENT_ALIASES.serialNo);
-    const serialNo = parseNumber(serialRaw) || incidents.length + 1;
+    const serialNo = Math.trunc(serialParsed);
     const ghrNumber = ghr || `GHR-${serialNo}`;
 
     let id = `row-${i}-${ghrNumber}-${serialNo}`;
@@ -153,6 +170,7 @@ export function parseIncidentLog(sheets: { name: string; rows: unknown[][] }[]):
       brief: getField(row, INCIDENT_ALIASES.brief),
       rootCause: getField(row, INCIDENT_ALIASES.rootCause),
       correctiveAction: getField(row, INCIDENT_ALIASES.correctiveAction),
+      immediateAction: getField(row, INCIDENT_ALIASES.immediateAction),
       location: getField(row, INCIDENT_ALIASES.location),
       time: getField(row, INCIDENT_ALIASES.time),
       personInvolved: getField(row, INCIDENT_ALIASES.personInvolved),
@@ -182,27 +200,71 @@ export function ensureUniqueIncidentIds(incidents: Incident[]): Incident[] {
 
 export function parseMonthlyTrendFromSheet(
   sheets: { name: string; rows: unknown[][] }[],
-): { monthKey: string; total: number; catA: number }[] {
+): {
+  monthKey: string;
+  total: number;
+  catA: number;
+  catB: number;
+  catC: number;
+  catD: number;
+  closed: number;
+  open: number;
+  closureRate: number;
+}[] {
   const sheet = findSheet(sheets, [...SHEET_CONFIG.monthlyTrend.names]);
   if (!sheet) return [];
 
-  const headerRow = detectHeaderRow(sheet.rows, SHEET_CONFIG.monthlyTrend.headerRow);
-  const { rows } = matrixToRecords(sheet.rows, headerRow);
+  // Config headerRow is 1-based Excel row; detectHeaderRow converts to 0-index.
+  const headerRow = detectHeaderRow(sheet.rows, SHEET_CONFIG.monthlyTrend.headerRow + 1);
+  // Prefer exact index 10 when it looks like a header (user workbook layout).
+  const preferred = SHEET_CONFIG.monthlyTrend.headerRow;
+  const preferredCells = (sheet.rows[preferred] ?? []).map((c) =>
+    String(c ?? "").toLowerCase(),
+  );
+  const usePreferred =
+    preferredCells.some((c) => c.includes("month")) &&
+    preferredCells.some((c) => c.includes("total"));
+  const resolvedHeader = usePreferred ? preferred : headerRow;
+  const { rows } = matrixToRecords(sheet.rows, resolvedHeader);
 
   return rows
     .map((row) => {
       const month = getField(row, ["month", "period", "month year"]);
-      const total = parseNumber(getField(row, ["total", "total incidents", "incidents"]));
-      const catA = parseNumber(getField(row, ["cat-a", "cata", "cat a", "critical"]));
       if (!month) return null;
+      const total = parseNumber(
+        getField(row, ["total incidents", "total", "incidents"]),
+      );
+      if (!total && !getField(row, ["cat-a", "cata", "cat a", "cat-a critical"])) {
+        return null;
+      }
       const date = parseFlexibleDate(`01 ${month}`);
       return {
         monthKey: date ? monthKeyFromDate(date) : month,
         total,
-        catA,
+        catA: parseNumber(getField(row, ["cat-a critical", "cat-a", "cata", "cat a", "critical"])),
+        catB: parseNumber(getField(row, ["cat-b high", "cat-b", "catb", "cat b"])),
+        catC: parseNumber(getField(row, ["cat-c medium", "cat-c", "catc", "cat c"])),
+        catD: parseNumber(getField(row, ["cat-d low", "cat-d", "catd", "cat d"])),
+        closed: parseNumber(getField(row, ["closed"])),
+        open: parseNumber(getField(row, ["open", "open cases"])),
+        closureRate: parseNumber(getField(row, ["closure rate", "closure"])),
       };
     })
-    .filter((item): item is { monthKey: string; total: number; catA: number } => !!item);
+    .filter(
+      (
+        item,
+      ): item is {
+        monthKey: string;
+        total: number;
+        catA: number;
+        catB: number;
+        catC: number;
+        catD: number;
+        closed: number;
+        open: number;
+        closureRate: number;
+      } => !!item,
+    );
 }
 
 export function parsePanIndiaStationCodes(

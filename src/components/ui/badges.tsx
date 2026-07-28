@@ -1,5 +1,5 @@
 import { CATEGORY_COLORS, DEPT_COLORS, STATUS_COLORS } from "@/lib/constants";
-import type { Category, Status } from "@/lib/types";
+import type { Category, RiskLevel, Status } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CategoryBadge({ category }: { category: Category | string }) {
@@ -45,24 +45,24 @@ export function RiskBadge({
   level,
   compact = false,
 }: {
-  level: "HIGH" | "MEDIUM" | "LOW";
+  level: RiskLevel;
   compact?: boolean;
 }) {
-  const styles = {
-    HIGH: "bg-red-500/15 text-red-400",
-    MEDIUM: "bg-amber-500/15 text-amber-400",
-    LOW: "bg-green-500/15 text-green-400",
+  const styles: Record<RiskLevel, string> = {
+    CRITICAL: "bg-red-900/20 text-red-800",
+    HIGH: "bg-red-500/15 text-red-500",
+    MEDIUM: "bg-amber-500/15 text-amber-500",
+    LOW: "bg-green-500/15 text-green-500",
   };
-  const icon = level === "HIGH" ? "🔴" : level === "MEDIUM" ? "⚠" : "✅";
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center gap-0.5 rounded-full font-semibold whitespace-nowrap",
         compact ? "px-1.5 py-0.5 text-[10px] leading-none" : "gap-1 px-2 py-0.5 text-xs",
-        styles[level],
+        styles[level] ?? styles.LOW,
       )}
     >
-      {icon} {level}
+      {level}
     </span>
   );
 }

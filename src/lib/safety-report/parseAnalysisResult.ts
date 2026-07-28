@@ -453,7 +453,7 @@ export function buildSafetyReportData(input: BuildReportDataInput): SafetyAnalys
       ? parsed.injuryAnalysis.mostCommonInjuries
       : injuriesFromText(sections["3. INJURY PATTERN DEEP DIVE"] || "").length
         ? injuriesFromText(sections["3. INJURY PATTERN DEEP DIVE"])
-        : injuryClusters.slice(0, 8).map((cluster, index) => ({
+        : injuryClusters.slice(0, 8).map((cluster) => ({
             label: cluster.bodyPart === "unspecified" ? cluster.incidentType : cluster.bodyPart,
             count: cluster.clusterSize,
             severity: clusterSeverity(cluster.riskLevel),

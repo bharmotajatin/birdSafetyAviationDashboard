@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { AppProviders } from "@/components/providers/AppProviders";
 import { ThemeScript } from "@/components/providers/ThemeScript";
-import { SafetyBot } from "@/components/ui/SafetyBot";
+import { BfsStorageHydrator } from "@/components/layout/BfsStorageHydrator";
+import { DataFolderWatcher } from "@/components/layout/DataFolderWatcher";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Safety Incident Dashboard",
-  description: "Enterprise aviation safety incident tracking system",
+  title: "Safety Sheet Analyser",
+  description: "Excel-based aviation safety incident analysis dashboard",
 };
 
 export const viewport: Viewport = {
@@ -29,8 +30,9 @@ export default function RootLayout({
         className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased"
       >
         <AppProviders>
+          <BfsStorageHydrator />
+          <DataFolderWatcher />
           {children}
-          <SafetyBot />
         </AppProviders>
       </body>
     </html>

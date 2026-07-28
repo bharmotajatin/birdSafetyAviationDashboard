@@ -148,9 +148,25 @@ export function UploadScreen() {
     workbookLoaded,
   } = useDashboardStore();
 
+  const isExcelFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    return name.endsWith(".xlsx") || name.endsWith(".xls");
+  };
+
   const onFile = async (file: File | undefined) => {
     if (!file || isLoading) return;
+    if (!isExcelFile(file)) {
+      useDashboardStore.setState({
+        error: "Please upload a GHR Excel workbook (.xlsx or .xls only).",
+      });
+      return;
+    }
     await loadWorkbook(file);
+  };
+
+  const handleTryAgain = () => {
+    useDashboardStore.setState({ error: null });
+    inputRef.current?.click();
   };
 
   const validationReady = Boolean(validation) || workbookLoaded;
@@ -256,10 +272,10 @@ export function UploadScreen() {
                   <div className="flex flex-col items-center text-center">
                     <UploadExcelIcon size={36} />
                     <p className="mt-2 text-[0.9rem] font-semibold text-white sm:text-[0.95rem]">
-                      Drop your Excel workbook here
+                      Upload your GHR Excel workbook to begin
                     </p>
                     <p className="mt-0.5 text-[0.68rem] text-white/45 sm:text-[0.72rem]">
-                      Supports .xlsx · .xls · .xlsm · Max 50MB
+                      Supports .xlsx · .xls · Max 50MB
                     </p>
                   </div>
                 </div>
@@ -277,7 +293,7 @@ export function UploadScreen() {
                     id={inputId}
                     ref={inputRef}
                     type="file"
-                    accept=".xlsx,.xls,.xlsm"
+                    accept=".xlsx,.xls"
                     className="sr-only"
                     suppressHydrationWarning
                     onChange={(e) => void onFile(e.target.files?.[0])}
@@ -298,9 +314,16 @@ export function UploadScreen() {
             )}
 
             {error ? (
-              <p className="mt-5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                {error}
-              </p>
+              <div className="mt-5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                <p>{error}</p>
+                <button
+                  type="button"
+                  onClick={handleTryAgain}
+                  className="mt-3 rounded-md border border-red-300/50 px-3 py-1.5 text-xs font-semibold text-red-100 transition hover:bg-red-500/20"
+                >
+                  Try again
+                </button>
+              </div>
             ) : null}
 
             {validation && !workbookLoaded ? (

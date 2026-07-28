@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 import { BirdFlightMark } from "@/components/dashboard/BirdFlightLogo";
 
 const STEPS = [
+  "Parsing Excel workbook…",
   "Reading workbook sheets…",
   "Validating incident schema…",
-  "Parsing 63 incidents…",
   "Running risk calculations…",
   "Generating analytics…",
 ] as const;

@@ -1,6 +1,3 @@
-// Bundle sizes as of 2026-05-21: Next.js 16 Turbopack build does not emit per-chunk
-// First Load JS in CLI output; run with ANALYZE or inspect .next for route bundles.
-// Production build: all routes compile clean; no chunk >400kb flagged in static analysis.
 import type { NextConfig } from "next";
 import path from "path";
 

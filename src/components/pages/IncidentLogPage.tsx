@@ -64,6 +64,8 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
     });
   }, [incidents, deferredSearch, department, category, status, station, dateFrom, dateTo]);
 
+  const isFilterPending = isPending || deferredSearch !== searchInput;
+
   const typeLabels = (data.incidentTypes ?? []).map((i) => i.label) ?? [];
   const typeValues = (data.incidentTypes ?? []).map((i) => i.value) ?? [];
   const details = CHART_DETAILS.incidentLog;
@@ -87,8 +89,10 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
   useEffect(() => {
     if (!highlightGHR) return;
 
-    setBlinkingGHR(highlightGHR);
-    setSearchInput(highlightGHR);
+    const applyTimer = window.setTimeout(() => {
+      setBlinkingGHR(highlightGHR);
+      setSearchInput(highlightGHR);
+    }, 0);
 
     const scrollTimer = window.setTimeout(() => {
       const row = document.getElementById(ghrRowId(highlightGHR));
@@ -99,6 +103,7 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
     const searchTimer = window.setTimeout(() => setSearchInput(""), 5000);
 
     return () => {
+      window.clearTimeout(applyTimer);
       window.clearTimeout(scrollTimer);
       window.clearTimeout(blinkTimer);
       window.clearTimeout(searchTimer);
@@ -169,6 +174,7 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search title or GHR…"
+            suppressHydrationWarning
             className="theme-input min-w-0 rounded-md px-3 py-2 text-sm sm:col-span-2 lg:col-span-4 xl:col-span-2"
           />
           <FilterSelect
@@ -192,6 +198,7 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
               value={dateFrom}
               onChange={(e) => updateFilter(() => setDateFrom(e.target.value))}
               aria-label="From date"
+              suppressHydrationWarning
               className="theme-input incident-log-date-input min-w-0 flex-1 rounded-md px-2 py-2 text-xs"
             />
             <input
@@ -199,6 +206,7 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
               value={dateTo}
               onChange={(e) => updateFilter(() => setDateTo(e.target.value))}
               aria-label="To date"
+              suppressHydrationWarning
               className="theme-input incident-log-date-input min-w-0 flex-1 rounded-md px-2 py-2 text-xs"
             />
           </div>
@@ -207,7 +215,7 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
 
       <FilterContentShell
         transitionKey="incident-log-table"
-        isPending={isPending}
+        isPending={isFilterPending}
         minHeight={320}
       >
         <motion.section className="glass-card interactive-card mb-6 overflow-hidden">
@@ -357,6 +365,7 @@ function FilterSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      suppressHydrationWarning
       className="theme-input min-w-0 w-full rounded-md px-3 py-2 text-sm"
     >
       {options.map((opt) => (

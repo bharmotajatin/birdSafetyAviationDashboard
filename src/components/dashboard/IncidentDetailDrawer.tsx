@@ -49,6 +49,7 @@ export function IncidentDetailDrawer({ incident, onClose }: Props) {
           <Section title="Incident brief" text={incident.brief} />
           <Section title="Root cause" text={incident.rootCause} />
           <Section title="Corrective action" text={incident.correctiveAction} />
+          <Section title="Immediate action" text={incident.immediateAction} />
           {incident.equipment ? (
             <Section title="Equipment" text={incident.equipment} />
           ) : null}

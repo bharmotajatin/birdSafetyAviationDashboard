@@ -22,10 +22,10 @@ export function SheetTabs() {
               key={route.href}
               href={route.href}
               className={cn(
-                "inline-flex whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition",
+                "inline-flex whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition border-l-2",
                 active
-                  ? "theme-bg-navy text-[var(--brand-gold)] shadow-sm"
-                  : "text-[var(--tab-inactive)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-primary)]",
+                  ? "bg-[#1a2a5e] text-[#d4af37] border-l-[#d4af37] shadow-sm"
+                  : "border-l-transparent text-[var(--tab-inactive)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-primary)]",
               )}
             >
               <span className="inline-flex items-center gap-1.5">

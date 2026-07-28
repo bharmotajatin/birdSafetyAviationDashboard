@@ -12,7 +12,17 @@ import { countBy, isValidMonthKey, monthLabelFromKey, normalizeIncidentType, pct
 
 type BuildInput = {
   incidents: Incident[];
-  monthlyFromSheet?: { monthKey: string; total: number; catA: number }[];
+  monthlyFromSheet?: {
+    monthKey: string;
+    total: number;
+    catA: number;
+    catB?: number;
+    catC?: number;
+    catD?: number;
+    closed?: number;
+    open?: number;
+    closureRate?: number;
+  }[];
   stationCodes?: string[];
   contributingFromSheet?: { label: string; value: number }[];
 };
@@ -23,6 +33,7 @@ export function calcRiskScore(catA: number, catB: number, catC: number, catD: nu
 
 export function calcRiskLevel(score: number, catA: number, total: number): RiskLevel {
   if (total === 0) return "LOW";
+  if (score >= 200 || catA >= 15) return "CRITICAL";
   if (score >= 80 || catA >= 5) return "HIGH";
   if (score >= 35 || catA >= 2) return "MEDIUM";
   return "LOW";
@@ -45,6 +56,9 @@ export function buildKpis(incidents: Incident[]): DashboardKpis {
       const typeLower = inc.incidentType.toLowerCase();
       if (typeLower.includes("staff injury")) counts.staffInjuries += 1;
       if (typeLower.includes("near miss")) counts.nearMiss += 1;
+      if (typeLower.includes("a/c damage") || typeLower.includes("ac damage")) {
+        counts.acDamage += 1;
+      }
 
       if (inc.department === "RAMP") counts.ramp += 1;
       else if (inc.department === "GSD") counts.gsd += 1;
@@ -63,6 +77,7 @@ export function buildKpis(incidents: Incident[]): DashboardKpis {
       catD: 0,
       staffInjuries: 0,
       nearMiss: 0,
+      acDamage: 0,
       ramp: 0,
       gsd: 0,
     },
@@ -71,6 +86,7 @@ export function buildKpis(incidents: Incident[]): DashboardKpis {
   return {
     ...acc,
     closureRate: pct(acc.closed, acc.total),
+    riskScore: calcRiskScore(acc.catA, acc.catB, acc.catC, acc.catD),
   };
 }
 

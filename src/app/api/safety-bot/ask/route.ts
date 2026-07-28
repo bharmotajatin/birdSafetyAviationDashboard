@@ -36,18 +36,17 @@ export async function POST(request: Request) {
     );
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
   try {
-    const text = await Promise.race([
-      runGroqCompletion({
-        apiKey,
-        system: body.system,
-        messages: body.messages,
-        jsonMode: body.jsonMode,
-      }),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Timeout")), 60_000);
-      }),
-    ]);
+    const text = await runGroqCompletion({
+      apiKey,
+      system: body.system,
+      messages: body.messages,
+      jsonMode: body.jsonMode,
+      signal: controller.signal,
+    });
 
     if (!text) {
       return NextResponse.json({ error: "Empty response from Groq" }, { status: 500 });
@@ -77,5 +76,7 @@ export async function POST(request: Request) {
       { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 },
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
