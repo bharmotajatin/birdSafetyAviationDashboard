@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "jest",
     "check": "tsc --noEmit && jest --ci",
+    "predeploy": "node scripts/patch-opennext-preview-props.mjs",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
