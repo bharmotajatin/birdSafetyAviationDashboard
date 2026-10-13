@@ -3,16 +3,13 @@
 import { useEffect } from "react";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 
-/** Restores workbook data from localStorage once on client mount. */
+/** Restores the current workbook from the server, then falls back to local cache. */
 export function BfsStorageHydrator() {
-  const data = useDashboardStore((state) => state.data);
-  const hydrateFromStorage = useDashboardStore((state) => state.hydrateFromStorage);
+  const hydrateFromServer = useDashboardStore((state) => state.hydrateFromServer);
 
   useEffect(() => {
-    if (!data) {
-      hydrateFromStorage();
-    }
-  }, [data, hydrateFromStorage]);
+    void hydrateFromServer();
+  }, [hydrateFromServer]);
 
   return null;
 }
