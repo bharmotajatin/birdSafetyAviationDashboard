@@ -3,7 +3,6 @@
 
 import { motion } from "framer-motion";
 import { Eye } from "lucide-react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { ghrRowId } from "@/lib/injury-cluster-modal";
@@ -199,9 +198,6 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
             </span>
           ))}
           <span className="theme-text-muted">— {displayedIncidents.length} incidents</span>
-          <Link href="/pattern-analysis" className="ml-auto underline-offset-2 hover:underline">
-            ← Back to Pattern Analysis
-          </Link>
         </motion.div>
       ) : null}
 

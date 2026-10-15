@@ -10,6 +10,7 @@ import { BOTTOM_BAR_GROUPS, NAV_GROUPS, findNav, tabMatches } from "@/lib/nav";
 import { withSharedFilters } from "@/lib/url-filters";
 import { cn } from "@/lib/utils";
 import { useResponsiveTables } from "@/components/layout/useResponsiveTables";
+import { NavHistoryTracker, PageBreadcrumb } from "@/components/layout/BackButton";
 
 /**
  * PA-12: DESIGNER's layout.
@@ -223,6 +224,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       {sb.open ? <button type="button" aria-label="Close menu" onClick={sb.close} className="fixed inset-0 z-30 hidden bg-black/30 sm:block lg:hidden" /> : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <NavHistoryTracker />
+        {pathname !== "/" ? <PageBreadcrumb /> : null}
         {current && current.group.tabs.length > 1 ? (
           <nav aria-label={`${current.group.label} tabs`} className="glass-header border-b theme-border">
             <div className="flex gap-1 overflow-x-auto px-4 py-2 sm:px-6">

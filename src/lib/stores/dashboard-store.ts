@@ -45,6 +45,10 @@ type PendingLoad =
 type DashboardState = {
   workbookLoaded: boolean;
   fileName: string | null;
+  /** When the stored sheet was imported (ISO), for the upload page "Continue" button. */
+  importedAt: string | null;
+  /** Set when a sheet is uploaded in this tab, so the home page goes on to the dashboard. */
+  uploadedAt: number | null;
   data: DashboardData | null;
   isLoading: boolean;
   error: string | null;
@@ -144,6 +148,8 @@ async function executePendingLoad(
     set({
       workbookLoaded: true,
       fileName: pending.file.name,
+      importedAt: new Date().toISOString(),
+      uploadedAt: Date.now(),
       data,
       isLoading: false,
       error: null,
@@ -206,6 +212,8 @@ function shouldBlockLoad(
 export const useDashboardStore = create<DashboardState>((set, get) => ({
   workbookLoaded: false,
   fileName: null,
+  importedAt: null,
+  uploadedAt: null,
   data: null,
   isLoading: false,
   error: null,
@@ -369,7 +377,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         return;
       }
       const json = (await res.json()) as {
-        workbook: { fileName: string } | null;
+        workbook: { fileName: string; importedAt?: string } | null;
         incidents: Incident[];
       };
       if (!json.workbook || !json.incidents?.length) {
@@ -391,6 +399,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       set({
         workbookLoaded: true,
         fileName: json.workbook.fileName,
+        importedAt: json.workbook.importedAt ?? null,
         data,
         isLoading: false,
         error: null,

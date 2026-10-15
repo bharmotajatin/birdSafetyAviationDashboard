@@ -2,7 +2,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageDataRequired } from "@/components/layout/PageDataRequired";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
 import { AnimatedKpiCard } from "@/components/ui/AnimatedKpiCard";
@@ -33,7 +34,17 @@ export function StationAnalysisPage() {
 }
 
 function StationAnalysisContent({ data }: { data: DashboardData }) {
-  const [selectedStation, setSelectedStation] = useState<string>("DEL");
+  // selected station lives in the URL (?view=BLR) so Back from a drill-down returns to it
+  const router = useRouter();
+  const pathname = usePathname() ?? "/station-analysis";
+  const params = useSearchParams();
+  const fromUrl = params?.get("view") ?? "";
+  const selectedStation = (STATIONS as readonly string[]).includes(fromUrl) ? fromUrl : "DEL";
+  const setSelectedStation = (code: string) => {
+    const next = new URLSearchParams(params?.toString() ?? "");
+    next.set("view", code);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
   const [isPending, startTransition] = useTransition();
 
   const scopedIncidents = useMemo(() => {

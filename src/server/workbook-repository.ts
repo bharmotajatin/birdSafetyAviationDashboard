@@ -604,3 +604,17 @@ export async function clearWorkbookStore(by = "Unknown"): Promise<void> {
   }
   await clearLocal(history);
 }
+
+export type WorkbookSource = { source: "d1"; workbook: { fileName: string; importedAt: string; rowCount: number } | null } | { source: "local" };
+
+/** On Cloudflare (D1 bound) the stored workbook's meta; "local" when running without D1 (dev / node). */
+export async function readWorkbookSource(): Promise<WorkbookSource> {
+  const env = await cloudflareEnv();
+  if (!env) return { source: "local" };
+  const row = await env.DB!.prepare("SELECT file_name, imported_at, row_count FROM workbook WHERE id = 1").first<{
+    file_name: string;
+    imported_at: string;
+    row_count: number;
+  }>();
+  return { source: "d1", workbook: row ? { fileName: row.file_name, importedAt: row.imported_at, rowCount: row.row_count } : null };
+}

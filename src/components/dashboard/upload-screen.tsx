@@ -17,6 +17,7 @@ import { UploadLoadingRadar } from "@/components/dashboard/UploadLoadingRadar";
 import { WorkbookValidationPanel } from "@/components/dashboard/WorkbookValidationPanel";
 import { REQUIRED_SHEET_SPECS } from "@/lib/validation/workbook";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
+import { uploadStatCards } from "@/lib/upload-stats";
 import { READ_ONLY_CLIENT } from "@/lib/read-only";
 
 const fadeUp = {
@@ -34,12 +35,6 @@ const FEATURE_PILLS = [
   { icon: AlertTriangle, label: "Risk Intelligence" },
 ] as const;
 
-const STAT_CARDS = [
-  { label: "Incidents Tracked", value: "63" },
-  { label: "Stations Monitored", value: "11" },
-  { label: "Analysis Sheets", value: "6" },
-  { label: "Risk Scoring", value: "Real-time" },
-] as const;
 
 const headerStagger = {
   hidden: {},
@@ -159,7 +154,9 @@ function UploadScreenEditable() {
     confirmValidationAndLoad,
     dismissValidation,
     workbookLoaded,
+    data,
   } = useDashboardStore();
+  const statCards = uploadStatCards(data?.incidents);
 
   const isExcelFile = (file: File) => {
     const name = file.name.toLowerCase();
@@ -362,7 +359,7 @@ function UploadScreenEditable() {
           }}
           className="mt-4 grid w-full grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3"
         >
-          {STAT_CARDS.map(({ label, value }) => (
+          {statCards.map(({ label, value }) => (
             <motion.div
               key={label}
               variants={{ hidden: fadeUp.hidden, visible: fadeUp.visible }}

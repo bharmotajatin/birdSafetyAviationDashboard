@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackButton } from "@/components/layout/BackButton";
 import { Pencil } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import toast from "react-hot-toast";
@@ -321,9 +321,7 @@ export function DataCheckPage() {
     return (
       <div className="glass-card p-6 text-sm">
         <p className="font-semibold">{error ?? "No workbook uploaded."}</p>
-        <Link href="/" className="mt-2 inline-block underline">
-          ← Back to dashboard
-        </Link>
+        <BackButton fallback="/" className="mt-2" />
       </div>
     );
   }

@@ -12,6 +12,7 @@ export function DataFolderWatcher() {
   const mergeFromDataFile = useDashboardStore((s) => s.mergeFromDataFile);
   const processingRef = useRef(new Set<string>());
   const lastSnapshotsRef = useRef<Map<string, number>>(new Map());
+  const d1StampRef = useRef<string | null>(null);
 
   const ingestFile = useCallback(async (fileName: string) => {
     if (processingRef.current.has(fileName)) return;
@@ -87,6 +88,16 @@ export function DataFolderWatcher() {
         const res = await fetch("/api/data/files");
         const json = await res.json();
         if (!res.ok || !Array.isArray(json.files)) return;
+        if (json.source === "d1") {
+          // Workers: no /data folder; reload when someone uploads a new sheet to D1.
+          const stamp: string = json.workbook?.importedAt ?? "";
+          const seen = d1StampRef.current;
+          d1StampRef.current = stamp;
+          if (seen !== null && seen !== stamp) {
+            await useDashboardStore.getState().hydrateFromServer();
+          }
+          return;
+        }
 
         const files = json.files as FileSnapshot[];
         const prev = lastSnapshotsRef.current;

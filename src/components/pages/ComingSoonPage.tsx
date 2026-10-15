@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Clock } from "lucide-react";
 import { findComingSoon } from "@/lib/nav";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
@@ -16,9 +15,6 @@ export function ComingSoonPage({ href }: { href: string }) {
           <Clock size={14} aria-hidden /> Coming soon
         </span>
         <p className="max-w-2xl text-sm theme-text">{tab?.comingSoon ?? "This view is being built."}</p>
-        <Link href="/overview" className="text-sm font-semibold text-[#1a2a5e] hover:text-[#d4af37] dark:text-[#d4af37]">
-          Back to Overview
-        </Link>
       </div>
     </div>
   );
