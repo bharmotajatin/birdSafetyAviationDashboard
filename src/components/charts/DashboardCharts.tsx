@@ -17,6 +17,8 @@ import { buildTreemapNodes } from "@/lib/treemap-theme";
 import type { ChartData, ChartOptions } from "chart.js";
 import type { Context } from "chartjs-plugin-datalabels";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { CLICK_HINT } from "@/lib/incident-links";
 import {
   CATEGORY_COLORS,
   CHART_PALETTE,
@@ -180,7 +182,64 @@ type CountChartProps = {
   yMax?: number;
   /** Use "wrap" for chip-style legend (Pan India incident types). */
   legendVariant?: "grid" | "wrap";
+} & ChartLinkProps;
+
+/** PA-07: bars/slices link to the Incident Log and show group details on hover. */
+export type ChartLinkProps = {
+  /** Incident Log URL for a label; omit to keep the chart non-clickable. */
+  linkFor?: (label: string) => string | undefined;
+  /** Extra tooltip lines for a label (count, open/closed, CAT breakdown). */
+  tooltipFor?: (label: string) => string[];
 };
+
+function darken(hex: string, amount = 0.15): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1]!, 16);
+  const ch = (shift: number) => Math.max(0, Math.round(((n >> shift) & 255) * (1 - amount)));
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, "0")).join("")}`;
+}
+
+type LinkEvent = { native?: Event | null };
+type LinkElement = { index: number }[];
+
+function useChartLinkOptions(labels: string[], { linkFor, tooltipFor }: ChartLinkProps) {
+  const router = useRouter();
+  const lastTap = useRef<number | null>(null);
+  if (!linkFor && !tooltipFor) return null;
+  return {
+    onHover: (event: LinkEvent, elements: LinkElement) => {
+      const target = event.native?.target as HTMLElement | undefined;
+      if (target) target.style.cursor = linkFor && elements.length ? "pointer" : "default";
+    },
+    onClick: (event: LinkEvent, elements: LinkElement) => {
+      const index = elements[0]?.index;
+      if (index == null || !linkFor) return;
+      const href = linkFor(labels[index]!);
+      if (!href) return;
+      const native = event.native as (Event & { pointerType?: string }) | null | undefined;
+      const isTouch = native?.pointerType === "touch" || native?.type?.startsWith("touch");
+      // Touch: first tap shows the tooltip, second tap on the same bar navigates.
+      if (isTouch && lastTap.current !== index) {
+        lastTap.current = index;
+        return;
+      }
+      router.push(href);
+    },
+    tooltip: {
+      backgroundColor: "rgba(15, 23, 42, 0.95)",
+      titleColor: "#fff",
+      bodyColor: "#e2e8f0",
+      footerColor: "#94a3b8",
+      usePointStyle: true,
+      callbacks: {
+        afterBody: (items: { dataIndex: number }[]) =>
+          tooltipFor && items[0] ? tooltipFor(labels[items[0].dataIndex]!) : [],
+        footer: () => (linkFor ? CLICK_HINT : ""),
+      },
+    },
+  };
+}
 
 export function CountChart({
   labels,
@@ -190,8 +249,11 @@ export function CountChart({
   centerText,
   yMax,
   legendVariant = "grid",
+  linkFor,
+  tooltipFor,
 }: CountChartProps) {
   const theme = useChartTheme();
+  const linkOptions = useChartLinkOptions(labels ?? [], { linkFor, tooltipFor });
 
   if (!labels?.length || !values?.length || !hasChartData(values)) {
     return <ChartNoData />;
@@ -217,6 +279,7 @@ export function CountChart({
         backgroundColor: palette,
         borderColor: palette,
         borderWidth: 1,
+        hoverBackgroundColor: palette.map((c) => darken(String(c))),
       },
     ],
   };
@@ -255,6 +318,24 @@ export function CountChart({
     },
   };
 
+  const withLinks = <T extends { plugins?: Record<string, unknown> }>(opts: T): T => {
+    if (!linkOptions) return opts;
+    const baseTooltip = (opts.plugins?.tooltip ?? {}) as { callbacks?: Record<string, unknown> };
+    return {
+      ...opts,
+      onHover: linkOptions.onHover,
+      onClick: linkOptions.onClick,
+      plugins: {
+        ...opts.plugins,
+        tooltip: {
+          ...baseTooltip,
+          ...linkOptions.tooltip,
+          callbacks: { ...baseTooltip.callbacks, ...linkOptions.tooltip.callbacks },
+        },
+      },
+    };
+  };
+
   const legend = (
     <RadialChartLegend
       labels={labels}
@@ -269,7 +350,7 @@ export function CountChart({
     return (
       <RadialChartLayout
         labelCount={labels.length}
-        chart={<Pie data={data} options={radialOptions as ChartOptions<"pie">} />}
+        chart={<Pie data={data} options={withLinks(radialOptions) as ChartOptions<"pie">} />}
         legend={legend}
         legendVariant={legendVariant}
       />
@@ -280,7 +361,7 @@ export function CountChart({
     return (
       <RadialChartLayout
         labelCount={labels.length}
-        chart={<Doughnut data={data} options={radialOptions as ChartOptions<"doughnut">} />}
+        chart={<Doughnut data={data} options={withLinks(radialOptions) as ChartOptions<"doughnut">} />}
         legend={legend}
         centerText={centerText}
         centerTextColor={theme.centerText}
@@ -290,16 +371,17 @@ export function CountChart({
 
   return (
     <ChartSurface>
-      <Bar data={data} options={barOptions as ChartOptions<"bar">} />
+      <Bar data={data} options={withLinks(barOptions as { plugins?: Record<string, unknown> }) as ChartOptions<"bar">} />
     </ChartSurface>
   );
 }
 
-type StatusBreakdownProps = {
+type StatusBreakdownProps = ChartLinkProps & {
   open: number;
   inProgress: number;
   pending: number;
   closed: number;
+  notSet?: number;
 };
 
 /** Horizontal bars — every status visible even when one dominates (e.g. 57 Closed). */
@@ -308,19 +390,26 @@ export function StatusBreakdownChart({
   inProgress,
   pending,
   closed,
+  notSet = 0,
+  linkFor,
+  tooltipFor,
 }: StatusBreakdownProps) {
   const countByStatus: Record<string, number> = {
     Open: open,
     "In Progress": inProgress,
     Pending: pending,
     Closed: closed,
+    "Not set": notSet,
   };
-  const labels = [...STATUS_BREAKDOWN_ORDER];
+  // "Not set" goes last and only when present.
+  const labels: string[] = [...STATUS_BREAKDOWN_ORDER, ...(notSet > 0 ? ["Not set"] : [])];
   const values = labels.map((s) => countByStatus[s] ?? 0);
   const colors = labels.map((s) => STATUS_COLORS[s as keyof typeof STATUS_COLORS]);
 
   return (
     <CountChart
+      linkFor={linkFor}
+      tooltipFor={tooltipFor}
       labels={labels}
       values={values}
       type="horizontal"
@@ -568,13 +657,20 @@ export function GroupedBarChart({ labels, series }: GroupedBarProps) {
   );
 }
 
-type RankedHorizontalBarProps = {
+type RankedHorizontalBarProps = ChartLinkProps & {
   labels: string[];
   values: number[];
+  /** When given, bars keep the caller's order and use these colours (one per label). */
+  colors?: string[];
 };
 
 /** Horizontal bar chart sorted largest → smallest with navy-gold rank colours. */
-export function RankedHorizontalBarChart({ labels, values }: RankedHorizontalBarProps) {
+export function RankedHorizontalBarChart({ labels, values, colors, linkFor, tooltipFor }: RankedHorizontalBarProps) {
+  if (colors) {
+    return (
+      <CountChart labels={labels} values={values} type="horizontal" colors={colors} linkFor={linkFor} tooltipFor={tooltipFor} />
+    );
+  }
   const nodes = buildTreemapNodes(labels, values);
   return (
     <CountChart
@@ -658,9 +754,11 @@ type StackedBarProps = {
   labels: string[];
   open: number[];
   closed: number[];
+  /** Legend label for the "open" series (default "Open"). */
+  openLabel?: string;
 };
 
-export function StackedStatusBar({ labels, open, closed }: StackedBarProps) {
+export function StackedStatusBar({ labels, open, closed, openLabel = "Open" }: StackedBarProps) {
   const theme = useChartTheme();
   const chartOptions = buildChartDefaults(theme);
   const dataLabels = {
@@ -678,7 +776,7 @@ export function StackedStatusBar({ labels, open, closed }: StackedBarProps) {
     labels,
     datasets: [
       { label: "Closed", data: closed, backgroundColor: "#22c55e", datalabels: dataLabels },
-      { label: "Open", data: open, backgroundColor: "#ef4444", datalabels: dataLabels },
+      { label: openLabel, data: open, backgroundColor: "#ef4444", datalabels: dataLabels },
     ],
   };
 

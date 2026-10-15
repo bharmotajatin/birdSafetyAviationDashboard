@@ -1,7 +1,7 @@
 import type { StationCode } from "./constants";
 
-export type Category = "CAT-A" | "CAT-B" | "CAT-C" | "CAT-D";
-export type Status = "Open" | "In Progress" | "Closed" | "Pending";
+export type Category = "CAT-A" | "CAT-B" | "CAT-C" | "CAT-D" | "NIL" | "Not set";
+export type Status = "Open" | "In Progress" | "Closed" | "Pending" | "Not set";
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW" | "CRITICAL";
 
 export type Incident = {
@@ -16,10 +16,18 @@ export type Incident = {
   department: string;
   status: Status;
   station: StationCode | string;
+  /** True when the station cell was empty and the code was taken from the GHR number prefix. */
+  stationFromGhr?: boolean;
   brief: string;
   rootCause: string;
   correctiveAction: string;
   immediateAction: string;
+  preventiveAction?: string;
+  /** Reporting date as an IST calendar day (YYYY-MM-DD), "" when blank or unreadable. */
+  reportDate?: string;
+  shiftTiming?: string;
+  staffNo?: string;
+  equipmentNo?: string;
   location: string;
   time: string;
   personInvolved: string;

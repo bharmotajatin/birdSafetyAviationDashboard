@@ -136,7 +136,7 @@ export function buildChartDefaults(theme: ChartTheme): ChartOptions {
     },
     scales: {
       x: {
-        ticks: { color: theme.tick, font: { size: 11 } },
+        ticks: { color: theme.tick, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, autoSkipPadding: 6 },
         grid: { color: theme.grid, lineWidth: 1, tickLength: 0 },
         border: { dash: [3, 3] },
       },

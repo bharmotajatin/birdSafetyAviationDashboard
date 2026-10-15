@@ -25,6 +25,8 @@ import {
 import { EmptyState, LoadingSkeleton } from "@/components/ui/dashboard-primitives";
 import { CategoryBadge, StatusDot } from "@/components/ui/badges";
 import { fadeUp, stagger } from "@/lib/animations";
+import { dataMonthLabels } from "@/lib/month-range";
+import { isValidMonthKey, monthLabelFromKey } from "@/lib/parse/utils";
 import {
   AskGroqError,
   askGroq,
@@ -90,22 +92,6 @@ type AiFollowUp = {
 
 const CARD_CLASS =
   "rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f172a]";
-const MONTH_SEQUENCE = [
-  "Jan 2025",
-  "Feb 2025",
-  "Mar 2025",
-  "Apr 2025",
-  "May 2025",
-  "Jun 2025",
-  "Jul 2025",
-  "Aug 2025",
-  "Sep 2025",
-  "Oct 2025",
-  "Nov 2025",
-  "Dec 2025",
-  "Jan 2026",
-  "Feb 2026",
-] as const;
 const TABS: Array<{ id: PatternTab; label: string }> = [
   { id: "all", label: "All Patterns" },
   { id: "injury", label: "Injury Clusters" },
@@ -313,12 +299,12 @@ function buildPatternQuestion(cluster: PatternCluster): string {
 }
 
 function PatternMiniTimeline({
-  months,
   incidents,
 }: {
-  months: readonly string[];
   incidents: Incident[];
 }) {
+  const pageData = usePageData();
+  const months = useMemo(() => dataMonthLabels(pageData?.incidents ?? []), [pageData?.incidents]);
   const monthCategory = new Map<string, Incident["category"]>();
   for (const incident of incidents) {
     const label = incident.monthKey && /^\d{4}-\d{2}$/.test(incident.monthKey)
@@ -367,23 +353,7 @@ function PatternMiniTimeline({
 }
 
 function monthLabelToSequence(monthKey: string): string | null {
-  const mapping: Record<string, string> = {
-    "2025-01": "Jan 2025",
-    "2025-02": "Feb 2025",
-    "2025-03": "Mar 2025",
-    "2025-04": "Apr 2025",
-    "2025-05": "May 2025",
-    "2025-06": "Jun 2025",
-    "2025-07": "Jul 2025",
-    "2025-08": "Aug 2025",
-    "2025-09": "Sep 2025",
-    "2025-10": "Oct 2025",
-    "2025-11": "Nov 2025",
-    "2025-12": "Dec 2025",
-    "2026-01": "Jan 2026",
-    "2026-02": "Feb 2026",
-  };
-  return mapping[monthKey] ?? null;
+  return isValidMonthKey(monthKey) ? monthLabelFromKey(monthKey) : null;
 }
 
 function severityWeight(category: Incident["category"]): number {
@@ -1142,7 +1112,7 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
                               <p><span className="font-semibold text-[#1a2a5e] dark:text-[#d4af37]">Department:</span> {cluster.department}</p>
                               <p><span className="font-semibold text-[#1a2a5e] dark:text-[#d4af37]">Affected months:</span> {cluster.affectedMonths.join(", ") || "None"}</p>
                             </div>
-                            <PatternMiniTimeline months={MONTH_SEQUENCE} incidents={cluster.incidents} />
+                            <PatternMiniTimeline incidents={cluster.incidents} />
                           </div>
 
                           <div className="flex flex-wrap gap-2">
@@ -1288,7 +1258,7 @@ function PatternAnalysisContent({ data }: { data: DashboardData }) {
                       {isOpen ? (
                         <div className="mt-3 space-y-3">
                           <p className="text-sm text-slate-600 dark:text-slate-300">{cluster.recommendation}</p>
-                          <PatternMiniTimeline months={MONTH_SEQUENCE} incidents={cluster.incidents} />
+                          <PatternMiniTimeline incidents={cluster.incidents} />
                           <button
                             type="button"
                             onClick={() => submitToBot(buildPatternQuestion(cluster))}

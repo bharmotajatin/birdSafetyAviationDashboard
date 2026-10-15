@@ -17,6 +17,7 @@ import { UploadLoadingRadar } from "@/components/dashboard/UploadLoadingRadar";
 import { WorkbookValidationPanel } from "@/components/dashboard/WorkbookValidationPanel";
 import { REQUIRED_SHEET_SPECS } from "@/lib/validation/workbook";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
+import { READ_ONLY_CLIENT } from "@/lib/read-only";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -130,6 +131,18 @@ function SheetValidationStrip({
 }
 
 export function UploadScreen() {
+  if (READ_ONLY_CLIENT) {
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
+        <p className="font-semibold text-slate-800">No incident data published yet.</p>
+        <p className="mt-1">This site is view only. Data is uploaded by the safety team.</p>
+      </div>
+    );
+  }
+  return <UploadScreenEditable />;
+}
+
+function UploadScreenEditable() {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const mounted = useSyncExternalStore(

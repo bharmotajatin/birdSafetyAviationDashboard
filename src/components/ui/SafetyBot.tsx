@@ -45,6 +45,7 @@ import type { BotAnswer, ChatMessage, SessionExchange } from "@/lib/safety-bot/t
 import type { IncidentLogBotFilters } from "@/lib/safety-bot/incident-log-nav";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 import type { DashboardData, Incident } from "@/lib/types";
+import { topIncidentType } from "@/lib/safety-bot/topType";
 
 const SESSION_SEED_KEY = "bfs-safety-bot-seed";
 const BANNER_COLLAPSED_KEY = "bfs_bot_banner_collapsed";
@@ -912,8 +913,8 @@ function matchQuickQuestionIncidents(questionId: string, data: DashboardData): I
       return data.incidents.filter((i) => i.department === "CARGO");
     case "gse-incidents":
       return data.incidents.filter((i) => i.incidentType.toLowerCase().includes("gse"));
-    case "loading-errors":
-      return data.incidents.filter((i) => i.incidentType.toLowerCase().includes("loading"));
+    case "top-type":
+      return topIncidentType(data.incidents).list;
     case "closed-count":
       return data.incidents.filter((i) => i.status === "Closed");
     case "in-progress-count":

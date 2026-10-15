@@ -1,7 +1,7 @@
-// Filter-blank fix applied — see git commit fix/filter-blank-pages.
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PageDataRequired } from "@/components/layout/PageDataRequired";
 import { PageHeader } from "@/components/ui/dashboard-primitives";
@@ -9,19 +9,24 @@ import { AnimatedKpiCard } from "@/components/ui/AnimatedKpiCard";
 import { KpiCardGrid } from "@/components/ui/KpiCardGrid";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { ExpandableChart } from "@/components/ui/ExpandableChart";
-import { RiskBadge } from "@/components/ui/badges";
 import { CountChart, RiskScatterChart, StackedStatusBar } from "@/components/charts/DashboardCharts";
 import { fadeUp, stagger } from "@/lib/animations";
-import { CHART_DETAILS } from "@/lib/chart-details";
-import { calcRiskScore } from "@/lib/analytics";
-import { CATEGORY_COLORS, RISK_COLORS, STATIONS } from "@/lib/constants";
-import type { DashboardData, StationStats } from "@/lib/types";
+import { buildChartDetails } from "@/lib/chart-details";
+import { chartLinks, incidentLogHref } from "@/lib/incident-links";
+import {
+  buildStationSummaries,
+  CATEGORY_BAR,
+  compareStations,
+  STATION_STATUS_COLORS,
+  STATION_STATUS_LEVEL,
+  STATION_STATUS_RULE,
+  type StationStatus,
+  type StationSummary,
+} from "@/lib/station-summary";
+import type { DashboardData } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type SortKey = keyof Pick<
-  StationStats,
-  "station" | "total" | "catA" | "catB" | "catC" | "catD" | "riskScore" | "closureRate" | "open" | "closed"
->;
+type SortKey = "rank" | "station" | "total" | "serious" | "notClosed" | "closed" | "closureRate";
 
 export function StationWisePage() {
   return (
@@ -31,225 +36,233 @@ export function StationWisePage() {
   );
 }
 
+function StatusLabel({ status }: { status: StationStatus }) {
+  const color = STATION_STATUS_COLORS[status];
+  return (
+    <span
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
+      style={{ backgroundColor: `${color}22`, color }}
+    >
+      {status}
+    </span>
+  );
+}
+
+/** PA-08: one thin stacked bar per card (A, B, C, D, NIL, Not set) with hover counts. */
+function CategoryStackBar({ summary }: { summary: StationSummary }) {
+  return (
+    <div className="mt-2">
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-500/15">
+        {CATEGORY_BAR.map(({ key, color }) => {
+          const n = summary.categories[key] ?? 0;
+          if (!n) return null;
+          return (
+            <span
+              key={key}
+              title={`${key}: ${n}`}
+              style={{ width: `${(n / summary.total) * 100}%`, backgroundColor: color }}
+            />
+          );
+        })}
+      </div>
+      <p className="mt-1 text-[10px] theme-text-muted">
+        {CATEGORY_BAR.filter(({ key }) => summary.categories[key])
+          .map(({ key }) => `${key.replace("CAT-", "")} ${summary.categories[key]}`)
+          .join(" · ")}
+      </p>
+    </div>
+  );
+}
+
 function StationWiseContent({ data }: { data: DashboardData }) {
   const kpis = data.kpis;
-  const details = CHART_DETAILS.stationWise;
-  const [sortKey, setSortKey] = useState<SortKey>("riskScore");
+  const incidents = useMemo(() => data.incidents ?? [], [data.incidents]);
+  const details = useMemo(() => buildChartDetails(incidents).stationWise, [incidents]);
+  const summaries = useMemo(() => buildStationSummaries(incidents), [incidents]);
+  const stationLinks = useMemo(() => chartLinks(incidents, "station"), [incidents]);
+  const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortAsc, setSortAsc] = useState(false);
 
-  const stationMap = useMemo(
-    () => new Map(data.stations.map((s) => [s.station, s])),
-    [data.stations],
-  );
+  const notClosedTotal = summaries.reduce((sum, s) => sum + s.notClosed, 0);
+  const needingAttention = summaries.filter((s) => s.status === "Needs attention");
 
-  const delStats = stationMap.get("DEL");
-  const delRiskScore = delStats?.riskScore ?? calcRiskScore(kpis.catA, kpis.catB, kpis.catC, kpis.catD);
-
-  const allStations = useMemo(
-    () =>
-      STATIONS.map((code) => {
-        const stats = stationMap.get(code);
-        if (stats) return stats;
-        return {
-          station: code,
-          total: 0,
-          catA: 0,
-          catB: 0,
-          catC: 0,
-          catD: 0,
-          riskScore: 0,
-          riskLevel: "LOW" as const,
-          closed: 0,
-          open: 0,
-          inProgress: 0,
-          pending: 0,
-          closureRate: 0,
-          nearMiss: 0,
-          staffInjuries: 0,
-        };
-      }),
-    [stationMap],
-  );
-
-  const sortedStations = useMemo(() => {
-    const list = [...allStations];
+  const sortedRows = useMemo(() => {
+    const list = [...summaries];
+    if (sortKey === "rank") return sortAsc ? list.reverse() : list;
     list.sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
-      if (typeof av === "string" && typeof bv === "string") {
-        return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-      }
-      return sortAsc ? Number(av) - Number(bv) : Number(bv) - Number(av);
+      const diff =
+        typeof av === "string" && typeof bv === "string" ? av.localeCompare(bv) : Number(av) - Number(bv);
+      return (sortAsc ? diff : -diff) || compareStations(a, b);
     });
     return list;
-  }, [allStations, sortKey, sortAsc]);
-
-  const highestRisk = "DEL";
-  const ranked = [...allStations].sort((a, b) => b.riskScore - a.riskScore);
+  }, [summaries, sortKey, sortAsc]);
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible">
       <motion.div variants={fadeUp}>
         <PageHeader
           title="Station-Wise Analysis"
-          subtitle="Risk intelligence and scoring across all stations."
+          subtitle="Which stations need attention, based on serious and not-closed incidents."
         />
       </motion.div>
 
       <KpiCardGrid className="mb-4">
         <AnimatedKpiCard index={0} label="Total Incidents Logged" value={kpis.total} tone="gold" />
         <AnimatedKpiCard index={1} label="Overall Closure Rate" value={kpis.closureRate} tone="green" suffix="%" decimals={1} />
-        <AnimatedKpiCard index={2} label="Best Station (Lowest Risk)" textValue={data.bestStation} />
-        <AnimatedKpiCard index={3} label="Total Open Cases" value={kpis.open} tone="red" />
+        <a href="#station-cards" className="block" aria-label="Scroll to stations needing attention">
+          <AnimatedKpiCard index={2} label="Stations needing attention" value={needingAttention.length} tone="red" />
+        </a>
+        <AnimatedKpiCard index={3} label="Not closed" value={notClosedTotal} tone="red" />
         <AnimatedKpiCard index={4} label="CAT-A Critical Total" value={kpis.catA} tone="red" />
       </KpiCardGrid>
 
-      <motion.div variants={fadeUp} custom={5} className="glass-card interactive-card mb-6 p-4 text-sm theme-text-secondary">
-        <strong className="text-[var(--brand-gold)]">Risk Score</strong> = (CAT-A × 4) + (CAT-B × 3) + (CAT-C × 2) + (CAT-D × 1).
-        {" "}For DEL: {delStats?.catA ?? kpis.catA}×4 + {delStats?.catB ?? kpis.catB}×3 + {delStats?.catC ?? kpis.catC}×2 + {delStats?.catD ?? kpis.catD}×1 ={" "}
-        <span className="font-semibold theme-text">{delRiskScore}</span>
-      </motion.div>
+      <motion.p variants={fadeUp} custom={5} className="glass-card mb-4 px-4 py-2 text-xs theme-text-secondary">
+        {STATION_STATUS_RULE}
+      </motion.p>
 
-      <div className="station-card-grid">
-        {sortedStations.map((s) => (
-          <div key={`card-${s.station}`} className="h-full min-w-0">
+      <div id="station-cards" className="station-card-grid scroll-mt-24">
+        {summaries.map((s) => (
+          <Link
+            key={`card-${s.station}`}
+            href={incidentLogHref({ station: s.station })}
+            className="block h-full min-w-0"
+            title={`View ${s.total} ${s.station} incidents in Incident Log`}
+          >
             <div
               className={cn(
                 "glass-card interactive-card station-card-shell h-full w-full",
-                `station-risk-card--${s.riskLevel}`,
+                `station-risk-card--${STATION_STATUS_LEVEL[s.status]}`,
               )}
             >
               <div className="station-card-content">
                 <div className="station-card-header">
                   <p className="station-card-code">{s.station}</p>
-                  <RiskBadge level={s.riskLevel} compact />
+                  <StatusLabel status={s.status} />
                 </div>
                 <div className="station-card-body">
                   <p className="station-card-score">
-                    <AnimatedCounter value={s.riskScore} />
+                    <AnimatedCounter value={s.total} />
                   </p>
-                  <div className="station-cat-badges">
-                    {(["CAT-A", "CAT-B", "CAT-C", "CAT-D"] as const).map((cat, idx) => {
-                      const counts = [s.catA, s.catB, s.catC, s.catD];
-                      return (
-                        <span
-                          key={cat}
-                          className="station-cat-badge"
-                          style={{
-                            backgroundColor: `${CATEGORY_COLORS[cat]}33`,
-                            color: CATEGORY_COLORS[cat],
-                          }}
-                        >
-                          {cat.split("-")[1]}:{counts[idx]}
-                        </span>
-                      );
-                    })}
-                  </div>
                   <p className="station-card-footer">
-                    Closed {s.closed} · Open {s.open}
+                    Serious {s.serious} · Not closed {s.notClosed} · Closed {s.closed}
                   </p>
+                  <CategoryStackBar summary={s} />
                 </div>
               </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+      <div className="mb-6 mt-6 grid gap-4 lg:grid-cols-2">
         <div>
           <ExpandableChart
-            title="Risk Score Ranking"
+            title="Serious Incidents by Station"
+            subtitle="Serious = CAT-A + CAT-B"
             renderChart={() => (
               <CountChart
-                labels={ranked.map((s) => s.station)}
-                values={ranked.map((s) => s.riskScore)}
+                labels={summaries.map((s) => s.station)}
+                values={summaries.map((s) => s.serious)}
                 type="horizontal"
-                colors={ranked.map((s) => RISK_COLORS[s.riskLevel])}
+                colors={summaries.map((s) => STATION_STATUS_COLORS[s.status])}
+                {...stationLinks}
               />
             )}
-            {...details.riskScore}
+            {...details.stations}
           />
         </div>
         <div>
           <ExpandableChart
-            title="Open vs Closed"
+            title="Not closed vs Closed"
             renderChart={() => (
               <StackedStatusBar
-                labels={allStations.map((s) => s.station)}
-                open={allStations.map((s) => s.open)}
-                closed={allStations.map((s) => s.closed)}
+                labels={summaries.map((s) => s.station)}
+                open={summaries.map((s) => s.notClosed)}
+                closed={summaries.map((s) => s.closed)}
+                openLabel="Not closed"
               />
             )}
             {...details.openClosed}
           />
         </div>
         <div className="lg:col-span-2">
-          {/* Was: bubble (risk vs volume). Risk Score Ranking already uses horizontal bar for risk score on this page — scatter plot separates volume×risk relationship without a second bubble/bars for risk score alone. */}
           <ExpandableChart
-            title="Risk vs Volume"
+            title="Serious vs Volume"
             renderChart={() => (
               <RiskScatterChart
-                points={allStations.map((s) => ({
+                points={summaries.map((s) => ({
                   x: s.total,
-                  y: s.riskScore,
-                  r: Math.max(4, s.catA * 2),
+                  y: s.serious,
+                  r: Math.max(4, s.notClosed * 2),
                   label: s.station,
                 }))}
               />
             )}
-            insight={details.riskScore.insight}
-            caption="Point size reflects CAT-A count. Only DEL has active incident volume."
-            columns={details.riskScore.columns}
-            rows={details.riskScore.rows}
+            insight={details.stations.insight}
+            caption="X = incidents, Y = serious (CAT-A + CAT-B). Point size reflects not-closed count."
+            columns={details.stations.columns}
+            rows={details.stations.rows}
           />
         </div>
       </div>
 
       <motion.section variants={fadeUp} custom={15} className="glass-card interactive-card overflow-hidden">
         <div className="data-table-wrap overflow-auto">
-          <table className="data-table w-full min-w-[960px]">
+          <table className="data-table w-full min-w-[760px]">
             <thead>
               <tr>
                 {(
                   [
+                    ["rank", "Priority"],
                     ["station", "Station"],
-                    ["total", "Total"],
-                    ["catA", "CAT-A"],
-                    ["catB", "CAT-B"],
-                    ["catC", "CAT-C"],
-                    ["catD", "CAT-D"],
-                    ["riskScore", "Risk Score"],
+                    ["total", "Incidents"],
+                    ["serious", "Serious"],
+                    ["notClosed", "Not closed"],
                     ["closed", "Closed"],
-                    ["open", "Open"],
                     ["closureRate", "Closure %"],
                   ] as const
                 ).map(([key, label]) => (
                   <th key={key}>
-                    <button type="button" onClick={() => {
-                      if (sortKey === key) setSortAsc(!sortAsc);
-                      else { setSortKey(key); setSortAsc(false); }
-                    }} className="theme-text hover:text-[var(--brand-gold)]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (sortKey === key) setSortAsc(!sortAsc);
+                        else {
+                          setSortKey(key);
+                          setSortAsc(false);
+                        }
+                      }}
+                      className="theme-text hover:text-[var(--brand-gold)]"
+                    >
                       {label}
                     </button>
                   </th>
                 ))}
-                <th>Risk Level</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {sortedStations.map((s) => (
-                <tr key={`row-${s.station}`} className={cn(s.station === highestRisk && s.total > 0 && "bg-red-500/10")}>
-                  <td className="font-semibold">{s.station}</td>
+              {sortedRows.map((s) => (
+                <tr
+                  key={`row-${s.station}`}
+                  className={cn(s.status === "Needs attention" && "bg-red-500/10")}
+                >
+                  <td>{summaries.indexOf(s) + 1}</td>
+                  <td className="font-semibold">
+                    <Link href={incidentLogHref({ station: s.station })} className="hover:underline">
+                      {s.station}
+                    </Link>
+                  </td>
                   <td>{s.total}</td>
-                  <td>{s.catA}</td>
-                  <td>{s.catB}</td>
-                  <td>{s.catC}</td>
-                  <td>{s.catD}</td>
-                  <td>{s.riskScore}</td>
+                  <td>{s.serious}</td>
+                  <td>{s.notClosed}</td>
                   <td>{s.closed}</td>
-                  <td>{s.open}</td>
                   <td>{s.closureRate}%</td>
-                  <td><RiskBadge level={s.riskLevel} /></td>
+                  <td>
+                    <StatusLabel status={s.status} />
+                  </td>
                 </tr>
               ))}
             </tbody>

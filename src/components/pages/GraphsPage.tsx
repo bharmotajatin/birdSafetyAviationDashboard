@@ -2,6 +2,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { dataMonthSpan, dataYears } from "@/lib/month-range";
 import { useDeferredValue, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { IncidentDetailDrawer } from "@/components/dashboard/IncidentDetailDrawer";
@@ -17,9 +18,12 @@ import {
   StatusBreakdownChart,
 } from "@/components/charts/DashboardCharts";
 import { fadeUp, stagger } from "@/lib/animations";
-import { CHART_DETAILS } from "@/lib/chart-details";
+import { buildChartDetails } from "@/lib/chart-details";
+import { typeColor } from "@/lib/type-colors";
+import { chartLinks } from "@/lib/incident-links";
 import { filterIncidents } from "@/lib/analytics";
-import { normalizeIncidentType, isValidMonthKey, monthLabelFromKey } from "@/lib/parse/utils";
+import { compareCountItems, isValidMonthKey, monthLabelFromKey } from "@/lib/parse/utils";
+import { departmentsOf, incidentTypesOf } from "@/lib/analytics";
 import { DEPT_COLORS, STATIONS } from "@/lib/constants";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 import type { DashboardData, GraphFilters } from "@/lib/types";
@@ -41,7 +45,6 @@ function GraphsContent({ data }: { data: DashboardData }) {
   const setGraphFilters = useDashboardStore((s) => s.setGraphFilters);
   const selectedIncident = useDashboardStore((s) => s.selectedIncident);
   const setSelectedIncident = useDashboardStore((s) => s.setSelectedIncident);
-  const details = CHART_DETAILS.graphs;
   const [isPending, startTransition] = useTransition();
 
   const incidents = useMemo(() => data.incidents ?? [], [data.incidents]);
@@ -59,6 +62,18 @@ function GraphsContent({ data }: { data: DashboardData }) {
 
   const deferredFiltered = useDeferredValue(filteredIncidents);
   const isFilterPending = isPending || deferredFiltered !== filteredIncidents;
+  // PA-07: popup tables/insights come from the same (filtered) incidents as the charts.
+  const details = useMemo(() => buildChartDetails(deferredFiltered).graphs, [deferredFiltered]);
+  const links = useMemo(
+    () => ({
+      type: chartLinks(deferredFiltered, "type"),
+      station: chartLinks(deferredFiltered, "station"),
+      category: chartLinks(deferredFiltered, "category"),
+      status: chartLinks(deferredFiltered, "status"),
+      department: chartLinks(deferredFiltered, "department"),
+    }),
+    [deferredFiltered],
+  );
 
   const grouped = useMemo(() => {
     const byStation = deferredFiltered.reduce((map, inc) => {
@@ -69,11 +84,13 @@ function GraphsContent({ data }: { data: DashboardData }) {
       return map;
     }, new Map<string, typeof deferredFiltered>());
 
+    // PA-04: an incident listing several types counts in each type's bar.
     const byType = deferredFiltered.reduce((map, inc) => {
-      const key = normalizeIncidentType(inc.incidentType);
-      const group = map.get(key) ?? [];
-      group.push(inc);
-      map.set(key, group);
+      for (const key of new Set(incidentTypesOf(inc))) {
+        const group = map.get(key) ?? [];
+        group.push(inc);
+        map.set(key, group);
+      }
       return map;
     }, new Map<string, typeof deferredFiltered>());
 
@@ -81,13 +98,20 @@ function GraphsContent({ data }: { data: DashboardData }) {
   }, [deferredFiltered]);
 
   const derived = useMemo(() => {
-    const stations = [...STATIONS];
+    const stations: string[] = [...STATIONS];
+    // Stations present in the sheet but not in the configured list (e.g. BLR), then Unknown last.
+    const extra = [...grouped.byStation.keys()]
+      .filter((s) => s !== "Unknown" && !stations.includes(s))
+      .sort();
+    stations.push(...extra);
+    const unknownStation = grouped.byStation.get("Unknown")?.length ?? 0;
+    if (unknownStation > 0) stations.push("Unknown");
     const stationTotals = stations.map(
       (s) => grouped.byStation.get(s)?.length ?? 0,
     );
     const types = [...grouped.byType.entries()]
       .map(([label, list]) => ({ label, value: list.length }))
-      .sort((a, b) => b.value - a.value);
+      .sort(compareCountItems);
 
     const monthMap = new Map<string, { total: number; catA: number; label: string }>();
     deferredFiltered.forEach((incident) => {
@@ -125,7 +149,8 @@ function GraphsContent({ data }: { data: DashboardData }) {
 
   const monthOptions = ["All", ...(data.monthlyTrend ?? []).map((m) => m.monthKey)];
 
-  const showKpis = filters.station === "All" || filters.station === "DEL";
+  // Use the global KPIs only when no filter narrows the list (previously DEL wrongly showed all-station totals).
+  const showKpis = deferredFiltered.length === incidents.length;
   const catA = showKpis ? kpis.catA : deferredFiltered.filter((i) => i.category === "CAT-A").length;
   const catB = showKpis ? kpis.catB : deferredFiltered.filter((i) => i.category === "CAT-B").length;
   const catC = showKpis ? kpis.catC : deferredFiltered.filter((i) => i.category === "CAT-C").length;
@@ -138,8 +163,13 @@ function GraphsContent({ data }: { data: DashboardData }) {
   const pending = showKpis
     ? kpis.pending
     : deferredFiltered.filter((i) => i.status === "Pending").length;
-  const ramp = showKpis ? kpis.ramp : deferredFiltered.filter((i) => i.department === "RAMP").length;
-  const gsd = showKpis ? kpis.gsd : deferredFiltered.filter((i) => i.department === "GSD").length;
+  const ramp = showKpis ? kpis.ramp : deferredFiltered.filter((i) => departmentsOf(i).includes("RAMP")).length;
+  const gsd = showKpis ? kpis.gsd : deferredFiltered.filter((i) => departmentsOf(i).includes("GSD")).length;
+  const catNil = deferredFiltered.filter((i) => i.category === "NIL").length;
+  const catNotSet = deferredFiltered.filter((i) => i.category === "Not set").length;
+  const statusNotSet = deferredFiltered.filter((i) => i.status === "Not set").length;
+  const catLabels = ["CAT-A", "CAT-B", "CAT-C", "CAT-D", ...(catNil ? ["NIL"] : []), ...(catNotSet ? ["Not set"] : [])];
+  const catValues = [catA, catB, catC, catD, ...(catNil ? [catNil] : []), ...(catNotSet ? [catNotSet] : [])];
 
   const applyFilter = (partial: Partial<GraphFilters>) => {
     startTransition(() => {
@@ -164,7 +194,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
         <FilterSelect
           label="Year"
           value={filters.year}
-          options={["All", "2025", "2026"]}
+          options={["All", ...dataYears(incidents)]}
           onChange={(year) => applyFilter({ year: year as GraphFilters["year"] })}
         />
         <FilterSelect
@@ -206,6 +236,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
                 <CountChart
                   labels={derived.stations ?? []}
                   values={derived.stationTotals ?? []}
+                  {...links.station}
                 />
               )}
               {...details.station}
@@ -217,10 +248,11 @@ function GraphsContent({ data }: { data: DashboardData }) {
               modalVariant="compact"
               renderChart={() => (
                 <CountChart
-                  labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
-                  values={[catA, catB, catC, catD]}
+                  labels={catLabels}
+                  values={catValues}
                   type="doughnut"
                   centerText={String(deferredFiltered.length)}
+                  {...links.category}
                 />
               )}
               {...details.category}
@@ -235,6 +267,8 @@ function GraphsContent({ data }: { data: DashboardData }) {
                   inProgress={inProgress}
                   pending={pending}
                   closed={closed}
+                  notSet={statusNotSet}
+                  {...links.status}
                 />
               )}
               {...details.status}
@@ -243,12 +277,14 @@ function GraphsContent({ data }: { data: DashboardData }) {
           <div>
             <ExpandableChart
               title="Department Split"
+              subtitle="An incident can appear in more than one bar."
               renderChart={() => (
                 <CountChart
                   labels={["RAMP", "GSD"]}
                   values={[ramp, gsd]}
                   type="horizontal"
                   colors={[DEPT_COLORS.RAMP, DEPT_COLORS.GSD]}
+                  {...links.department}
                 />
               )}
               {...details.department}
@@ -271,10 +307,13 @@ function GraphsContent({ data }: { data: DashboardData }) {
           <div>
             <ExpandableChart
               title="Incident Type Frequency"
+              subtitle="An incident can appear in more than one bar."
               renderChart={() => (
                 <RankedHorizontalBarChart
                   labels={derived.types.map((t) => t.label) ?? []}
                   values={derived.types.map((t) => t.value) ?? []}
+                  colors={derived.types.map((t) => typeColor(t.label))}
+                  {...links.type}
                 />
               )}
               {...details.typeFrequency}
@@ -297,7 +336,7 @@ function GraphsContent({ data }: { data: DashboardData }) {
             />
           )}
           insight="Each dot is one incident positioned by date (X) and severity category (Y). Click a dot to open the incident detail drawer."
-          caption="Timeline of all filtered incidents from Jan 2025 to Feb 2026."
+          caption={`Timeline of all filtered incidents${dataMonthSpan(incidents) ? ` from ${dataMonthSpan(incidents)}` : ""}.`}
           columns={[
             { key: "GHR", label: "GHR" },
             { key: "Title", label: "Title" },

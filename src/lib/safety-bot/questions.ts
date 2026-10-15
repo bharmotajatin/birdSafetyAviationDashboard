@@ -15,6 +15,7 @@ import { calcRiskScore } from "@/lib/analytics";
 import { monthLabelFromKey } from "@/lib/parse/utils";
 import type { DashboardData, Incident } from "@/lib/types";
 import type { QuickQuestion } from "./types";
+import { topIncidentType } from "./topType";
 
 function catAByMonth(incidents: Incident[]) {
   const map = new Map<string, number>();
@@ -477,21 +478,23 @@ export const QUICK_QUESTIONS: QuickQuestion[] = [
     },
   },
   {
-    id: "loading-errors",
+    id: "top-type",
     icon: AlertTriangle,
-    label: "Loading errors",
+    label: "Top incident type",
     fullQuery:
-      "Show all loading error incidents with full details. What categories are they? Which department? Are they resolved?",
+      "Which incident type occurs most often in the uploaded log? Show its incidents with category, department and status.",
     answer: (data) => {
-      const list = data.incidents.filter((i) => i.incidentType.toLowerCase().includes("loading"));
+      const { label, list } = topIncidentType(data.incidents);
       return {
-        headline: `${list.length} loading-related incidents`,
+        headline: label ? `${label}: ${list.length} incidents` : "No incident types found",
         rows: [
-          { label: "Loading errors", value: String(list.length), highlight: true },
+          { label: label || "Top type", value: String(list.length), highlight: true },
           { label: "Open", value: String(list.filter((i) => i.status === "Open").length) },
-          { label: "Pending", value: String(list.filter((i) => i.status === "Pending").length) },
+          { label: "CAT-A", value: String(list.filter((i) => i.category === "CAT-A").length) },
         ],
-        summary: `Found ${list.length} loading error / loading type incidents.`,
+        summary: label
+          ? `${label} is the most common incident type with ${list.length} incidents.`
+          : "The uploaded log has no incident types.",
       };
     },
   },
@@ -515,7 +518,7 @@ const INCIDENT_QUESTION_IDS = [
   "ramp-incidents",
   "cargo-dept",
   "gse-incidents",
-  "loading-errors",
+  "top-type",
 ] as const;
 const TREND_QUESTION_IDS = [
   "peak-month",

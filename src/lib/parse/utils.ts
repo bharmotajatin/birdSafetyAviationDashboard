@@ -101,43 +101,93 @@ export function monthLabelFromKey(key: string): string {
   return `${MONTHS[date.getMonth()]} ${year}`;
 }
 
-export function normalizeCategory(value: string): "CAT-A" | "CAT-B" | "CAT-C" | "CAT-D" {
+export function normalizeCategory(
+  value: string,
+): "CAT-A" | "CAT-B" | "CAT-C" | "CAT-D" | "NIL" | "Not set" {
   const text = value.toUpperCase().replace(/\s+/g, "");
+  if (!text) return "Not set";
+  if (text === "NIL" || text === "NA" || text === "N/A") return "NIL";
   if (/^CAT-?A$/.test(text) || text === "CATA" || /^A$/.test(text)) return "CAT-A";
   if (/^CAT-?B$/.test(text) || text === "CATB" || /^B$/.test(text)) return "CAT-B";
   if (/^CAT-?C$/.test(text) || text === "CATC" || /^C$/.test(text)) return "CAT-C";
   if (/^CAT-?D$/.test(text) || text === "CATD" || /^D$/.test(text)) return "CAT-D";
-  return "CAT-D";
+  return "Not set";
 }
 
-export function normalizeStatus(value: string): "Open" | "In Progress" | "Closed" | "Pending" {
-  const text = value.toLowerCase();
+export function normalizeStatus(
+  value: string,
+): "Open" | "In Progress" | "Closed" | "Pending" | "Not set" {
+  const text = value.trim().toLowerCase();
+  if (!text) return "Not set";
   if (text.includes("progress")) return "In Progress";
   if (text.includes("pending")) return "Pending";
   if (text.includes("closed") || text.includes("complete")) return "Closed";
   if (text.includes("open")) return "Open";
-  return "Closed";
+  return "Not set";
+}
+
+/** Labels for missing values; charts sort these last. */
+export const NOT_SET_LABELS = ["Not set", "Unknown", "NIL"] as const;
+
+export function isNotSetLabel(label: string): boolean {
+  return (NOT_SET_LABELS as readonly string[]).includes(label);
+}
+
+const EMPTY_VALUE = /^(none|nil|na|n\/a|-+|unknown|not set)$/i;
+
+/** PA-04/05: split multi-value cells such as "GSE Damage; Collision/Impact" or "RAMP; GSD". */
+export function splitMultiValue(value: string): string[] {
+  return String(value ?? "")
+    .split(/\s*[;,|\n]\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 /** Merge duplicate types from inconsistent Excel casing (e.g. STAFF INJURY vs Staff Injury). */
 export function normalizeIncidentType(value: string): string {
+  const parts = splitMultiValue(value);
+  if (parts.length > 1) {
+    const types = [...new Set(parts.map(normalizeSingleIncidentType))];
+    const real = types.filter((t) => t !== "Not set");
+    return real.length ? real.join("; ") : "Not set";
+  }
+  return normalizeSingleIncidentType(parts[0] ?? "");
+}
+
+function normalizeSingleIncidentType(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) return "Unknown";
+  if (!trimmed || EMPTY_VALUE.test(trimmed)) return "Not set";
 
   const lower = trimmed.toLowerCase();
   if (lower === "a/c damage" || lower === "ac damage") return "A/C Damage";
 
   return lower
     .split(/\s+/)
-    .map((word) => {
-      if (word === "a/c") return "A/C";
-      if (word.length <= 3 && /^[a-z]+$/.test(word)) return word.toUpperCase();
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
+    .map((word) =>
+      // Capitalise each "/" segment too ("collision/impact" -> "Collision/Impact"); short alpha segments stay acronyms (A/C, GSE, ULD).
+      word
+        .split("/")
+        .map((seg) => {
+          if (seg.length <= 3 && /^[a-z]+$/.test(seg)) return seg.toUpperCase();
+          return seg.charAt(0).toUpperCase() + seg.slice(1);
+        })
+        .join("/"),
+    )
     .join(" ");
 }
 
 export function normalizeDepartment(value: string): string {
+  const parts = splitMultiValue(value);
+  if (parts.length > 1) {
+    const depts = [...new Set(parts.map(normalizeSingleDepartment))];
+    const real = depts.filter((d) => d !== "Not set");
+    return real.length ? real.join("; ") : "Not set";
+  }
+  return normalizeSingleDepartment(parts[0] ?? "");
+}
+
+function normalizeSingleDepartment(value: string): string {
+  if (!value.trim() || EMPTY_VALUE.test(value.trim())) return "Not set";
   const text = value.toUpperCase();
   if (text.includes("RAMP")) return "RAMP";
   if (text.includes("GSD")) return "GSD";
@@ -145,10 +195,21 @@ export function normalizeDepartment(value: string): string {
   return value.trim() || "OTHER";
 }
 
+/**
+ * Station code from a GHR number prefix (e.g. "BLR2026/27" -> "BLR") when it is a known station.
+ * Only used when the sheet's station cell is empty; never overrides a filled station.
+ */
+export function stationFromGhrNumber(ghr: string, known: readonly string[]): string | null {
+  const m = /^\s*([A-Za-z]{3})(?=[^A-Za-z]|$)/.exec(String(ghr ?? ""));
+  if (!m) return null;
+  const code = m[1]!.toUpperCase();
+  return known.includes(code) ? code : null;
+}
+
 export function normalizeStation(value: string): string {
   const text = value.trim().toUpperCase();
   if (text.length >= 3) return text.slice(0, 3);
-  return text || "DEL";
+  return text || "Unknown";
 }
 
 export function parseNumber(value: unknown): number {
@@ -174,7 +235,34 @@ export function countBy<T>(
   }
   return [...map.entries()]
     .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value);
+    .sort(compareCountItems);
+}
+
+/** Highest count first; "Not set"/"Unknown"/"NIL" always last. */
+export function compareCountItems(
+  a: { label: string; value: number },
+  b: { label: string; value: number },
+): number {
+  const na = isNotSetLabel(a.label) ? 1 : 0;
+  const nb = isNotSetLabel(b.label) ? 1 : 0;
+  if (na !== nb) return na - nb;
+  return b.value - a.value;
+}
+
+/** Like countBy, but an item counts once per value it lists, so totals can exceed item count. */
+export function countByMulti<T>(
+  items: T[],
+  keysFn: (item: T) => string[],
+): { label: string; value: number }[] {
+  const map = new Map<string, number>();
+  for (const item of items) {
+    for (const key of new Set(keysFn(item))) {
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+  }
+  return [...map.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort(compareCountItems);
 }
 
 export function getField(row: Record<string, string>, aliases: string[]): string {
@@ -222,11 +310,48 @@ export function getRawField(row: Record<string, unknown>, aliases: string[]): un
 
 export function formatDisplayDate(date: Date | null): string {
   if (!date) return "—";
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return `${String(date.getDate()).padStart(2, "0")} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/**
+ * Real Excel date cells are rewritten to ISO text (yyyy-mm-dd) before the sheet is turned
+ * into strings. Without this, SheetJS formats them with the cell's own number format
+ * (e.g. m/d/yyyy -> "1/17/2026"), which the D/M text-date parser then misreads
+ * (1/17/2026 -> May 2027). Text cells such as "26/01/2026" are left untouched.
+ */
+/** "HH:MM" from the fractional part of an Excel serial (0.5 -> "12:00"). */
+export function excelFractionToTime(v: number): string {
+  const mins = Math.round((((v % 1) + 1) % 1) * 1440) % 1440;
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+}
+
+export function normalizeDateCells(sheet: XLSX.WorkSheet): XLSX.WorkSheet {
+  for (const key of Object.keys(sheet)) {
+    if (key.startsWith("!")) continue;
+    const cell = sheet[key] as XLSX.CellObject | undefined;
+    if (!cell) continue;
+    let date: Date | null = null;
+    // Time-only cells (e.g. Time of Incident formatted h:mm) must stay a time, not become "1899-12-31".
+    const fmt = String(cell.z ?? "").replace(/\[[^\]]*\]|"[^"]*"/g, "");
+    const timeOnlyFmt = /h/i.test(fmt) && !/[dy]/i.test(fmt);
+    if (cell.t === "n" && typeof cell.v === "number" && (timeOnlyFmt || (cell.v >= 0 && cell.v < 1 && /h/i.test(fmt)))) {
+      cell.w = excelFractionToTime(cell.v);
+      continue;
+    }
+    if (cell.t === "d" && cell.v instanceof Date && isValidDate(cell.v) && (timeOnlyFmt || cell.v.getFullYear() < 1901)) {
+      cell.w = `${String(cell.v.getHours()).padStart(2, "0")}:${String(cell.v.getMinutes()).padStart(2, "0")}`;
+      continue;
+    }
+    if (cell.t === "d" && cell.v instanceof Date && isValidDate(cell.v)) {
+      // Round to the nearest local day: SheetJS can land a few seconds before midnight.
+      const shifted = new Date(cell.v.getTime() + 12 * 60 * 60 * 1000);
+      date = new Date(shifted.getFullYear(), shifted.getMonth(), shifted.getDate());
+    } else if (cell.t === "n" && typeof cell.v === "number" && cell.z && XLSX.SSF.is_date(String(cell.z))) {
+      date = parseExcelSerialDate(cell.v);
+    }
+    if (date) cell.w = formatIsoDate(date);
+  }
+  return sheet;
 }
 
 export function readWorkbookMatrices(
@@ -235,7 +360,7 @@ export function readWorkbookMatrices(
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   return workbook.SheetNames.map((name) => ({
     name,
-    rows: XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name]!, {
+    rows: XLSX.utils.sheet_to_json<unknown[]>(normalizeDateCells(workbook.Sheets[name]!), {
       header: 1,
       defval: "",
       raw: false,
@@ -337,7 +462,7 @@ export function matrixToRecords(rows: unknown[][], headerRow: number) {
 export function readSheetMatrix(sheet: XLSX.WorkSheet, name = ""): RawSheetMatrix {
   return {
     name,
-    rows: XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    rows: XLSX.utils.sheet_to_json<unknown[]>(normalizeDateCells(sheet), {
       header: 1,
       defval: "",
       raw: false,

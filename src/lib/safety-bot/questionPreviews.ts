@@ -1,6 +1,7 @@
 import { calcRiskScore } from "@/lib/analytics";
 import { monthLabelFromKey } from "@/lib/parse/utils";
 import type { DashboardData } from "@/lib/types";
+import { topIncidentType } from "./topType";
 
 function delRiskScore(data: DashboardData) {
   const del = data.incidents.filter((i) => i.station === "DEL");
@@ -69,8 +70,10 @@ export function getQuestionPreviewSubtitle(questionId: string, data: DashboardDa
       return "RAMP vs GSD stats";
     case "gse-incidents":
       return `${data.incidents.filter((i) => i.incidentType.toLowerCase().includes("gse")).length} GSE type`;
-    case "loading-errors":
-      return `${data.incidents.filter((i) => i.incidentType.toLowerCase().includes("loading")).length} loading`;
+    case "top-type": {
+      const top = topIncidentType(data.incidents);
+      return top.label ? `${top.list.length} ${top.label}` : "No types";
+    }
     default:
       return `${data.incidents.length} incidents loaded`;
   }

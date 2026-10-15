@@ -11,21 +11,25 @@ import { AnimatedKpiCard } from "@/components/ui/AnimatedKpiCard";
 import { KpiCardGrid } from "@/components/ui/KpiCardGrid";
 import { ExpandableChart } from "@/components/ui/ExpandableChart";
 import { FilterContentShell } from "@/components/ui/FilterContentShell";
-import { RiskBadge } from "@/components/ui/badges";
 import { CountChart, GroupedBarChart } from "@/components/charts/DashboardCharts";
 import { fadeUp, stagger } from "@/lib/animations";
-import { CHART_DETAILS } from "@/lib/chart-details";
+import { buildChartDetails } from "@/lib/chart-details";
+import { typeColor } from "@/lib/type-colors";
+import { chartLinks } from "@/lib/incident-links";
+import { buildStationStats, incidentTypesOf } from "@/lib/analytics";
+import {
+  buildStationSummaries,
+  STATION_STATUS_COLORS,
+  STATION_STATUS_RULE,
+} from "@/lib/station-summary";
+import { countByMulti } from "@/lib/parse/utils";
 import { resolveStationStats } from "@/lib/empty-dashboard";
-import { normalizeIncidentType } from "@/lib/parse/utils";
-import { CATEGORY_COLORS, RISK_COLORS, STATIONS } from "@/lib/constants";
+import { CATEGORY_COLORS, STATIONS } from "@/lib/constants";
 import type { DashboardData, StationStats } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STATION_CODES = [...STATIONS] as string[];
 
-function isValidStation(code: string | null): code is string {
-  return code !== null && STATION_CODES.includes(code);
-}
 
 function hexWithOpacity(hex: string, opacity: number): string {
   const h = hex.replace("#", "");
@@ -53,7 +57,7 @@ function formatCellValue(total: number, value: number): string {
 export function PanIndiaPage() {
   return (
     <Suspense fallback={<LoadingSkeleton />}>
-      <PageDataRequired>
+      <PageDataRequired ignoreFilters={["station"]}>
         {(data) => <PanIndiaContent data={data} />}
       </PageDataRequired>
     </Suspense>
@@ -64,22 +68,28 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // PA-11: same station list, labels and order as Station-Wise (stations with incidents + Unknown).
+  const summaries = useMemo(() => buildStationSummaries(data.incidents ?? []), [data.incidents]);
+  const labels = useMemo(() => summaries.map((s) => s.station), [summaries]);
+  const summaryMap = useMemo(() => new Map(summaries.map((s) => [s.station, s])), [summaries]);
   const selectedStation = useMemo(() => {
     const fromUrl = searchParams.get("station");
-    return isValidStation(fromUrl) ? fromUrl : "DEL";
-  }, [searchParams]);
+    if (fromUrl && labels.includes(fromUrl)) return fromUrl;
+    return labels.includes("DEL") ? "DEL" : (labels[0] ?? "DEL");
+  }, [searchParams, labels]);
   const [isPending, startTransition] = useTransition();
 
-  const labels = STATION_CODES;
-  const stationMap = useMemo(
-    () => new Map((data.stations ?? []).map((s) => [s.station, s])),
-    [data.stations],
+  const stationStats = useMemo(
+    () => buildStationStats(data.incidents ?? [], labels),
+    [data.incidents, labels],
   );
-  const details = CHART_DETAILS.panIndia;
+  const stationMap = useMemo(() => new Map(stationStats.map((s) => [s.station, s])), [stationStats]);
+  const allDetails = useMemo(() => buildChartDetails(data.incidents ?? []), [data.incidents]);
+  const details = allDetails.panIndia;
 
   const stationData = useMemo(
-    () => resolveStationStats(data.stations ?? [], selectedStation),
-    [data.stations, selectedStation],
+    () => resolveStationStats(stationStats, selectedStation),
+    [stationStats, selectedStation],
   );
   const hasData = (stationData?.total ?? 0) > 0;
 
@@ -95,7 +105,7 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
   );
 
   const pageSubtitle = hasData
-    ? "Side-by-side comparison of all 11 Indian airport stations."
+    ? `Side-by-side comparison of the ${labels.length} stations with incidents in the sheet.`
     : `${selectedStation} — No incident data recorded in this period`;
 
   const selectedKpis = {
@@ -112,24 +122,18 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
     [data.incidents, selectedStation],
   );
 
-  const typeLabels = useMemo(
-    () => [...new Set(selectedIncidents.map((i) => normalizeIncidentType(i.incidentType)))],
+  const typeCounts = useMemo(
+    () => countByMulti(selectedIncidents, incidentTypesOf),
     [selectedIncidents],
   );
-  const typeValues = useMemo(
-    () =>
-      typeLabels.map(
-        (t) =>
-          selectedIncidents.filter((i) => normalizeIncidentType(i.incidentType) === t).length,
-      ),
-    [selectedIncidents, typeLabels],
+  const typeLabels = useMemo(() => typeCounts.map((t) => t.label), [typeCounts]);
+  const typeValues = useMemo(() => typeCounts.map((t) => t.value), [typeCounts]);
+  const typeDetails = useMemo(
+    () => buildChartDetails(selectedIncidents, { station: String(selectedStation) }).incidentLog.byType,
+    [selectedIncidents, selectedStation],
   );
   const hasTypeBreakdown = typeValues.some((v) => v > 0);
 
-  const ranked = useMemo(
-    () => [...(data.stations ?? [])].sort((a, b) => b.riskScore - a.riskScore),
-    [data.stations],
-  );
 
   const groupedSeries = useMemo(
     () => [
@@ -174,7 +178,8 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
   const pillTooltip = (code: string, stats: StationStats | undefined) => {
     const total = stats?.total ?? 0;
     if (total === 0) return "No incidents recorded";
-    return `${total} incidents · Risk ${stats?.riskLevel ?? "LOW"}`;
+    const sum = summaryMap.get(code);
+    return `${total} incidents · ${sum?.serious ?? 0} serious · ${sum?.notClosed ?? 0} not closed · ${sum?.status ?? "On track"}`;
   };
 
   const contentKey = `${selectedStation}-${hasData ? "data" : "empty"}`;
@@ -227,6 +232,10 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
         })}
       </motion.div>
 
+      <motion.p variants={fadeUp} className="glass-card mb-4 px-4 py-2 text-xs theme-text-secondary">
+        {STATION_STATUS_RULE}
+      </motion.p>
+
       <FilterContentShell transitionKey={contentKey} isPending={isPending} minHeight={hasData ? 400 : 320}>
         {!hasData ? (
           <div className="mb-6 flex min-h-[320px] flex-col items-center justify-center gap-4 text-center">
@@ -241,7 +250,7 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
               No incidents recorded for {selectedStation} in this reporting period
             </p>
             <p className="max-w-[320px] text-xs text-[#94a3b8]">
-              All 11 stations are monitored — data appears here when incidents are logged and
+              All {STATION_CODES.length} stations are monitored — data appears here when incidents are logged and
               uploaded
             </p>
             <button
@@ -269,16 +278,17 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
               </div>
               <div>
                 <ExpandableChart
-                  title="Risk Score Ranking"
+                  title="Station Status"
+                  subtitle="Incidents per station, coloured by Needs attention / Watch / On track"
                   renderChart={() => (
                     <CountChart
-                      labels={ranked.map((s) => s.station) ?? []}
-                      values={ranked.map((s) => s.riskScore) ?? []}
+                      labels={labels}
+                      values={summaries.map((s) => s.total)}
                       type="horizontal"
-                      colors={ranked.map((s) => RISK_COLORS[s.riskLevel]) ?? []}
+                      colors={summaries.map((s) => STATION_STATUS_COLORS[s.status])}
                     />
                   )}
-                  {...details.riskRanking}
+                  {...allDetails.stationWise.stations}
                 />
               </div>
               <div>
@@ -322,6 +332,8 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
                         values={typeValues ?? []}
                         type="pie"
                         legendVariant="wrap"
+                        colors={typeLabels.map(typeColor)}
+                        {...chartLinks(selectedIncidents, "type", { station: String(selectedStation) })}
                       />
                     ) : (
                       <div className="flex h-[80px] items-center justify-center text-[13px] text-[#94a3b8]">
@@ -329,7 +341,7 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
                       </div>
                     )
                   }
-                  {...CHART_DETAILS.incidentLog.byType}
+                  {...typeDetails}
                 />
               </div>
             </div>
@@ -348,15 +360,17 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
                 <th>CAT-B</th>
                 <th>CAT-C</th>
                 <th>CAT-D</th>
-                <th>Risk Score</th>
-                <th>Risk Level</th>
+                <th>NIL / Not set</th>
+                <th>Serious</th>
+                <th>Not closed</th>
                 <th>Closed</th>
-                <th>Open</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {labels.map((code) => {
                 const s = stationMap.get(code);
+                const sum = summaryMap.get(code);
                 const total = s?.total ?? 0;
                 const isZeroRow = total === 0;
                 const isSelectedRow = code === selectedStation;
@@ -379,16 +393,20 @@ function PanIndiaContent({ data }: { data: DashboardData }) {
                     <td>{formatCellValue(total, s?.catB ?? 0)}</td>
                     <td>{formatCellValue(total, s?.catC ?? 0)}</td>
                     <td>{formatCellValue(total, s?.catD ?? 0)}</td>
-                    <td>{formatCellValue(total, s?.riskScore ?? 0)}</td>
+                    <td>{formatCellValue(total, (sum?.categories.NIL ?? 0) + (sum?.categories["Not set"] ?? 0))}</td>
+                    <td>{formatCellValue(total, sum?.serious ?? 0)}</td>
+                    <td>{formatCellValue(total, sum?.notClosed ?? 0)}</td>
+                    <td>{formatCellValue(total, s?.closed ?? 0)}</td>
                     <td>
-                      {isZeroRow ? (
-                        <span className="text-[#94a3b8]">No data</span>
+                      {sum ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: STATION_STATUS_COLORS[sum.status] }}>
+                          <span className="h-2 w-2 rounded-full" style={{ background: STATION_STATUS_COLORS[sum.status] }} aria-hidden />
+                          {sum.status}
+                        </span>
                       ) : (
-                        <RiskBadge level={s?.riskLevel ?? "LOW"} />
+                        <span className="text-[#94a3b8]">No data</span>
                       )}
                     </td>
-                    <td>{formatCellValue(total, s?.closed ?? 0)}</td>
-                    <td>{formatCellValue(total, s?.open ?? 0)}</td>
                   </tr>
                 );
               })}

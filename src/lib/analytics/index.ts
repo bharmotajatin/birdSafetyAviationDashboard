@@ -8,7 +8,27 @@ import type {
   RiskLevel,
   StationStats,
 } from "../types";
-import { countBy, isValidMonthKey, monthLabelFromKey, normalizeIncidentType, pct } from "../parse/utils";
+import {
+  countBy,
+  countByMulti,
+  isValidMonthKey,
+  monthLabelFromKey,
+  normalizeIncidentType,
+  pct,
+  splitMultiValue,
+} from "../parse/utils";
+
+/** PA-05: every department an incident lists. */
+export function departmentsOf(incident: Incident): string[] {
+  const parts = splitMultiValue(incident.department);
+  return parts.length ? parts : ["Not set"];
+}
+
+/** PA-04: every incident type an incident lists. */
+export function incidentTypesOf(incident: Incident): string[] {
+  const parts = splitMultiValue(normalizeIncidentType(incident.incidentType));
+  return parts.length ? parts : ["Not set"];
+}
 
 type BuildInput = {
   incidents: Incident[];
@@ -60,8 +80,9 @@ export function buildKpis(incidents: Incident[]): DashboardKpis {
         counts.acDamage += 1;
       }
 
-      if (inc.department === "RAMP") counts.ramp += 1;
-      else if (inc.department === "GSD") counts.gsd += 1;
+      const depts = departmentsOf(inc);
+      if (depts.includes("RAMP")) counts.ramp += 1;
+      if (depts.includes("GSD")) counts.gsd += 1;
 
       return counts;
     },
@@ -308,7 +329,7 @@ export function buildDashboardData(input: BuildInput): DashboardData {
   const kpis = buildKpis(incidents);
   const stations = buildStationStats(incidents, input.stationCodes);
   const monthlyTrend = buildMonthlyTrend(incidents);
-  const incidentTypes = countBy(incidents, (i) => normalizeIncidentType(i.incidentType));
+  const incidentTypes = countByMulti(incidents, incidentTypesOf);
   const incidentTypeBreakdown = buildIncidentTypeBreakdown(incidents);
 
   const contributingFactors =
@@ -332,7 +353,7 @@ export function buildDashboardData(input: BuildInput): DashboardData {
     incidentTypes,
     incidentTypeBreakdown,
     contributingFactors,
-    departments: countBy(incidents, (i) => i.department),
+    departments: countByMulti(incidents, departmentsOf),
     categories: [
       { label: "CAT-A", value: kpis.catA },
       { label: "CAT-B", value: kpis.catB },
@@ -381,7 +402,7 @@ export function filterIncidents(
       if (incident.station !== filters.station) return false;
     }
     if (filters.department && filters.department !== "All") {
-      if (incident.department !== filters.department) return false;
+      if (!departmentsOf(incident).includes(filters.department)) return false;
     }
     if (filters.category && filters.category !== "All") {
       if (incident.category !== filters.category) return false;

@@ -3,12 +3,15 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export interface ExpandableChartColumn {
   key: string;
   label: string;
   align?: "left" | "right" | "center";
+  /** Row field holding a CSS colour; renders a dot before the cell value (matches the chart bar). */
+  dotKey?: string;
 }
 
 interface ExpandableChartProps {
@@ -30,6 +33,36 @@ interface ExpandableChartProps {
   rows: Record<string, string | number>[];
 }
 
+type TableRow = Record<string, string | number>;
+
+const alignClass = (align?: ExpandableChartColumn["align"]) =>
+  align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+
+/** PA-07: dark hover/tap tooltip for a linked popup row. */
+function RowTooltip({ row, x, y }: { row: TableRow; x: number; y: number }) {
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none fixed z-[200] max-w-[240px] rounded-md bg-slate-900/95 px-3 py-2 text-[11px] leading-snug text-slate-100 shadow-lg"
+      style={{ left: x + 12, top: y + 12 }}
+    >
+      <div className="mb-1 flex items-center gap-1.5 font-semibold text-white">
+        {row.__dot ? (
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: String(row.__dot) }} />
+        ) : null}
+        {row.__label}
+      </div>
+      <div>
+        Count: {row.__count} ({row.__pct} of incidents)
+      </div>
+      <div>
+        Not closed: {row.__notClosed} · Closed: {row.__closed} · CAT-A: {row.__catA}
+      </div>
+      <div className="mt-1 border-t border-slate-700 pt-1 text-slate-300">Click to view in Incident Log →</div>
+    </div>
+  );
+}
+
 function DataTable({
   title,
   columns,
@@ -37,56 +70,96 @@ function DataTable({
 }: {
   title: string;
   columns: ExpandableChartColumn[];
-  rows: Record<string, string | number>[];
+  rows: TableRow[];
 }) {
+  const router = useRouter();
+  const [hover, setHover] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [tapped, setTapped] = useState<number | null>(null);
+  const lastPointer = React.useRef<string>("mouse");
+  const countKey = columns.find((c) => c.key === "Count" || c.key === "Total" || c.key === "Total Inc")?.key;
+
+  const activate = (row: TableRow, index: number, x: number, y: number) => {
+    const href = row.__href ? String(row.__href) : "";
+    if (!href) return;
+    // Touch: first tap shows the tooltip, second tap navigates.
+    if (lastPointer.current === "touch" && tapped !== index) {
+      setTapped(index);
+      setHover({ index, x, y });
+      return;
+    }
+    router.push(href);
+  };
+
   return (
     <div className="data-table-wrap overflow-x-auto">
       <table className="data-table w-full min-w-[360px] text-xs">
         <thead>
           <tr>
             {columns.map((col) => (
-              <th
-                key={col.key}
-                className={
-                  col.align === "right"
-                    ? "text-right"
-                    : col.align === "center"
-                      ? "text-center"
-                      : "text-left"
-                }
-              >
+              <th key={col.key} className={alignClass(col.align)}>
                 {col.label}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
-            <motion.tr
-              key={`${title}-row-${i}`}
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.03 }}
-              className="border-b theme-border hover:bg-[var(--table-row-hover)]"
-            >
-              {columns.map((col) => (
-                <td
-                  key={col.key}
-                  className={
-                    col.align === "right"
-                      ? "text-right"
-                      : col.align === "center"
-                        ? "text-center"
-                        : "text-left"
-                  }
-                >
-                  {row[col.key] ?? ""}
-                </td>
-              ))}
-            </motion.tr>
-          ))}
+          {rows.map((row, i) => {
+            const href = row.__href ? String(row.__href) : "";
+            return (
+              <motion.tr
+                key={`${title}-row-${i}`}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.03 }}
+                className={cn(
+                  "border-b theme-border hover:bg-[var(--table-row-hover)]",
+                  href && "cursor-pointer",
+                )}
+                tabIndex={href ? 0 : undefined}
+                onPointerDown={(e) => {
+                  lastPointer.current = e.pointerType;
+                }}
+                onMouseMove={href ? (e) => setHover({ index: i, x: e.clientX, y: e.clientY }) : undefined}
+                onMouseLeave={href ? () => setHover(null) : undefined}
+                onClick={href ? (e) => activate(row, i, e.clientX, e.clientY) : undefined}
+                onKeyDown={
+                  href
+                    ? (e) => {
+                        if (e.key === "Enter") router.push(href);
+                      }
+                    : undefined
+                }
+              >
+                {columns.map((col) => (
+                  <td key={col.key} className={alignClass(col.align)}>
+                    {col.dotKey && row[col.dotKey] ? (
+                      <span
+                        aria-hidden
+                        className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle"
+                        style={{ background: String(row[col.dotKey]) }}
+                      />
+                    ) : null}
+                    {href && col.key === countKey ? (
+                      <a
+                        href={href}
+                        className="no-underline hover:underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                        }}
+                      >
+                        {row[col.key] ?? ""}
+                      </a>
+                    ) : (
+                      (row[col.key] ?? "")
+                    )}
+                  </td>
+                ))}
+              </motion.tr>
+            );
+          })}
         </tbody>
       </table>
+      {hover && rows[hover.index] ? <RowTooltip row={rows[hover.index]!} x={hover.x} y={hover.y} /> : null}
     </div>
   );
 }

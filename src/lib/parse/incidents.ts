@@ -1,5 +1,6 @@
 import { SHEET_CONFIG, STATIONS } from "../constants";
 import type { Incident } from "../types";
+import { istDayKey } from "../analyses/day";
 import {
   detectHeaderRow,
   detectIncidentHeaderRow,
@@ -12,13 +13,15 @@ import {
   normalizeCategory,
   normalizeDepartment,
   normalizeIncidentType,
+  normalizeKey,
   normalizeStation,
+  stationFromGhrNumber,
   normalizeStatus,
   parseFlexibleDate,
   parseNumber,
 } from "./utils";
 
-const INCIDENT_ALIASES = {
+export const INCIDENT_ALIASES = {
   serialNo: ["s.no", "sno", "sr no", "serial no", "serial", "#", "sl no", "sl.no"],
   title: [
     "incident title",
@@ -84,6 +87,11 @@ const INCIDENT_ALIASES = {
     "action taken",
     "corrective measure",
   ],
+  reportDate: ["reporting date", "report date", "date of reporting"],
+  shiftTiming: ["shift timing", "shift timings", "shift"],
+  staffNo: ["staff no.", "staff no", "staff number", "employee no", "emp no"],
+  equipmentNo: ["equipment no.", "equipment no", "equipment number", "gse no", "gse number"],
+  preventiveAction: ["preventive action", "preventive actions", "preventive measure", "preventive measures"],
   immediateAction: [
     "immediate action",
     "immediate action taken",
@@ -99,7 +107,17 @@ const INCIDENT_ALIASES = {
     "staff name",
     "name of person",
   ],
-  equipment: ["equipment", "equipment details", "asset", "gse", "equipment involved"],
+  // PA-06: exact type headers first; "equipment" alone must not prefix-match "Equipment No.".
+  equipment: [
+    "gse / equipment type",
+    "gse/equipment type",
+    "equipment type",
+    "gse type",
+    "equipment details",
+    "equipment involved",
+    "asset",
+    "gse",
+  ],
   contributingFactor: [
     "contributing factor",
     "factor category",
@@ -119,6 +137,13 @@ export function parseIncidentLog(sheets: { name: string; rows: unknown[][] }[]):
     const label = String(cell ?? "").trim();
     return label || `Column ${index + 1}`;
   });
+
+  // PA-01: station column may have no header; detect it by its IATA-code values.
+  const stationKeys = new Set(INCIDENT_ALIASES.station.map(normalizeKey));
+  if (!headers.some((h: string) => stationKeys.has(normalizeKey(h)))) {
+    const stationIndex = detectStationColumn(sheet.rows.slice(headerRow + 1), headerCells);
+    if (stationIndex >= 0) headers[stationIndex] = "Station";
+  }
 
   const incidents: Incident[] = [];
   const usedIds = new Set<string>();
@@ -153,6 +178,14 @@ export function parseIncidentLog(sheets: { name: string; rows: unknown[][] }[]):
     }
     usedIds.add(id);
 
+    const rawReport = getRawField(
+      Object.fromEntries(headers.map((header: string, index: number) => [header, rawRow[index]])),
+      INCIDENT_ALIASES.reportDate,
+    );
+    const reportParsed = rawReport === "" || rawReport == null ? null : parseFlexibleDate(rawReport);
+    const stationCell = getField(row, INCIDENT_ALIASES.station);
+    const ghrStation = stationCell ? null : stationFromGhrNumber(ghr, STATIONS);
+
     const incident: Incident = {
       id,
       serialNo,
@@ -166,15 +199,21 @@ export function parseIncidentLog(sheets: { name: string; rows: unknown[][] }[]):
       ),
       department: normalizeDepartment(getField(row, INCIDENT_ALIASES.department)),
       status: normalizeStatus(getField(row, INCIDENT_ALIASES.status)),
-      station: normalizeStation(getField(row, INCIDENT_ALIASES.station) || "DEL"),
+      station: ghrStation ?? normalizeStation(stationCell),
+      ...(ghrStation ? { stationFromGhr: true } : {}),
       brief: getField(row, INCIDENT_ALIASES.brief),
       rootCause: getField(row, INCIDENT_ALIASES.rootCause),
       correctiveAction: getField(row, INCIDENT_ALIASES.correctiveAction),
       immediateAction: getField(row, INCIDENT_ALIASES.immediateAction),
+      preventiveAction: getField(row, INCIDENT_ALIASES.preventiveAction),
+      reportDate: reportParsed ? istDayKey(reportParsed) : "",
+      shiftTiming: getField(row, INCIDENT_ALIASES.shiftTiming),
+      staffNo: getField(row, INCIDENT_ALIASES.staffNo),
+      equipmentNo: getField(row, INCIDENT_ALIASES.equipmentNo),
       location: getField(row, INCIDENT_ALIASES.location),
       time: getField(row, INCIDENT_ALIASES.time),
       personInvolved: getField(row, INCIDENT_ALIASES.personInvolved),
-      equipment: getField(row, INCIDENT_ALIASES.equipment),
+      equipment: getField(row, INCIDENT_ALIASES.equipment).replace(/\s+/g, " ").trim(),
       contributingFactor: getField(row, INCIDENT_ALIASES.contributingFactor),
       monthKey: monthKeyFromDate(date),
     };
@@ -183,6 +222,35 @@ export function parseIncidentLog(sheets: { name: string; rows: unknown[][] }[]):
   }
 
   return incidents;
+}
+
+/** Index of an unlabeled column whose non-empty values are mostly 3-letter IATA codes, or -1. */
+export function detectStationColumn(dataRows: unknown[][], headerCells: unknown[]): number {
+  const known = new Set<string>(STATIONS);
+  const width = Math.max(headerCells.length, ...dataRows.map((r) => r.length), 0);
+  let best = -1;
+  let bestScore = 0;
+  for (let c = 0; c < width; c++) {
+    if (String(headerCells[c] ?? "").trim()) continue;
+    let filled = 0;
+    let codes = 0;
+    let knownHits = 0;
+    for (const r of dataRows) {
+      const v = String(r[c] ?? "").trim().toUpperCase();
+      if (!v) continue;
+      filled++;
+      if (/^[A-Z]{3}$/.test(v)) {
+        codes++;
+        if (known.has(v)) knownHits++;
+      }
+    }
+    if (filled < 3 || codes / filled < 0.8 || knownHits === 0) continue;
+    if (codes > bestScore) {
+      bestScore = codes;
+      best = c;
+    }
+  }
+  return best;
 }
 
 export function ensureUniqueIncidentIds(incidents: Incident[]): Incident[] {

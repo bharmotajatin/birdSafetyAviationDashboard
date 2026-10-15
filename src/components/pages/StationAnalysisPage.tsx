@@ -16,9 +16,11 @@ import {
   RankedHorizontalBarChart,
 } from "@/components/charts/DashboardCharts";
 import { fadeUp, stagger } from "@/lib/animations";
-import { CHART_DETAILS } from "@/lib/chart-details";
-import { buildMonthlyTrendForIncidents } from "@/lib/analytics";
-import { normalizeIncidentType } from "@/lib/parse/utils";
+import { buildChartDetails } from "@/lib/chart-details";
+import { typeColor } from "@/lib/type-colors";
+import { chartLinks } from "@/lib/incident-links";
+import { buildMonthlyTrendForIncidents, departmentsOf, incidentTypesOf } from "@/lib/analytics";
+import { compareCountItems } from "@/lib/parse/utils";
 import { CATEGORY_COLORS, DEPT_COLORS, STATIONS } from "@/lib/constants";
 import type { DashboardData } from "@/lib/types";
 
@@ -33,13 +35,17 @@ export function StationAnalysisPage() {
 function StationAnalysisContent({ data }: { data: DashboardData }) {
   const [selectedStation, setSelectedStation] = useState<string>("DEL");
   const [isPending, startTransition] = useTransition();
-  const details = CHART_DETAILS.stationAnalysis;
 
   const scopedIncidents = useMemo(() => {
     const incidents = data.incidents ?? [];
     if (!incidents.length) return [];
     return incidents.filter((i) => i.station === selectedStation);
   }, [data.incidents, selectedStation]);
+  const allDetails = useMemo(
+    () => buildChartDetails(scopedIncidents, { station: String(selectedStation) }),
+    [scopedIncidents, selectedStation],
+  );
+  const details = allDetails.stationAnalysis;
 
   const scoped = useMemo(() => {
     const incidents = scopedIncidents;
@@ -58,15 +64,16 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
     const factorMap = new Map<string, number>();
 
     for (const inc of incidents) {
-      if (inc.department === "RAMP") ramp += 1;
-      else if (inc.department === "GSD") gsd += 1;
+      const depts = departmentsOf(inc);
+      if (depts.includes("RAMP")) ramp += 1;
+      if (depts.includes("GSD")) gsd += 1;
       if (inc.status === "Closed") closed += 1;
       if (inc.category === "CAT-A") catA += 1;
       else if (inc.category === "CAT-B") catB += 1;
       else if (inc.category === "CAT-C") catC += 1;
       else if (inc.category === "CAT-D") catD += 1;
 
-      const typeKey = normalizeIncidentType(inc.incidentType);
+      for (const typeKey of new Set(incidentTypesOf(inc))) {
       const typeEntry = typeMap.get(typeKey) ?? {
         count: 0,
         catA: 0,
@@ -84,16 +91,16 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
       if (inc.status === "Open") typeEntry.open += 1;
       else if (inc.status === "Closed") typeEntry.closed += 1;
       typeMap.set(typeKey, typeEntry);
+      }
 
       if (inc.contributingFactor) {
         factorMap.set(inc.contributingFactor, (factorMap.get(inc.contributingFactor) ?? 0) + 1);
       }
     }
 
-    const types = [...typeMap.entries()].map(([label, entry]) => ({
-      label,
-      value: entry.count,
-    }));
+    const types = [...typeMap.entries()]
+      .map(([label, entry]) => ({ label, value: entry.count }))
+      .sort(compareCountItems);
     const factors = [...factorMap.entries()].map(([label, value]) => ({ label, value }));
     const monthly = buildMonthlyTrendForIncidents(incidents);
 
@@ -210,14 +217,19 @@ function StationAnalysisContent({ data }: { data: DashboardData }) {
                   colors={Object.values(CATEGORY_COLORS)}
                 />
               )}
-              {...CHART_DETAILS.incidentLog.category}
+              {...allDetails.incidentLog.category}
             />
           </div>
           <div>
             <ExpandableChart
               title="Incident Types Ranked"
               renderChart={() => (
-                <RankedHorizontalBarChart labels={typeLabels} values={typeValues} />
+                <RankedHorizontalBarChart
+                  labels={typeLabels}
+                  values={typeValues}
+                  colors={typeLabels.map(typeColor)}
+                  {...chartLinks(scopedIncidents, "type", { station: String(selectedStation) })}
+                />
               )}
               {...details.typesRanked}
             />

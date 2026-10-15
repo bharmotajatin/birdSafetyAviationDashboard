@@ -3,7 +3,8 @@
 
 import { motion } from "framer-motion";
 import { Eye } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { ghrRowId } from "@/lib/injury-cluster-modal";
 import { IncidentDetailDrawer } from "@/components/dashboard/IncidentDetailDrawer";
@@ -16,7 +17,16 @@ import { FilterContentShell } from "@/components/ui/FilterContentShell";
 import { CategoryBadge, DeptPill, StatusDot } from "@/components/ui/badges";
 import { CountChart, StatusBreakdownChart } from "@/components/charts/DashboardCharts";
 import { fadeUp, stagger } from "@/lib/animations";
-import { CHART_DETAILS } from "@/lib/chart-details";
+import { buildChartDetails } from "@/lib/chart-details";
+import { typeColor } from "@/lib/type-colors";
+import {
+  chartLinks,
+  LINK_FILTER_KEYS,
+  LINK_FILTER_LABELS,
+  matchesLinkFilters,
+  readLinkFilters,
+  type LinkFilterKey,
+} from "@/lib/incident-links";
 import { filterIncidents } from "@/lib/analytics";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 import type { DashboardData } from "@/lib/types";
@@ -32,6 +42,17 @@ export function IncidentLogPage() {
 function IncidentLogContent({ data }: { data: DashboardData }) {
   const searchParams = useSearchParams();
   const highlightGHR = searchParams.get("highlight");
+  const router = useRouter();
+  const pathname = usePathname();
+  // PA-07: chart/popup links land here with ?type=&department=&station=&category=&status=&equipment=.
+  const linkFilters = useMemo(() => readLinkFilters(searchParams), [searchParams]);
+  const activeLinkKeys = LINK_FILTER_KEYS.filter((k) => linkFilters[k]);
+  const removeLinkFilter = (key: LinkFilterKey) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete(key);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  };
   const setSelectedIncident = useDashboardStore((s) => s.setSelectedIncident);
   const selectedIncident = useDashboardStore((s) => s.selectedIncident);
   const botFilter = useDashboardStore((s) => s.botIncidentFilters);
@@ -50,10 +71,13 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
   const [dateTo, setDateTo] = useState("");
 
   const incidents = useMemo(() => data.incidents ?? [], [data.incidents]);
+  const catNil = incidents.filter((i) => i.category === "NIL").length;
+  const catNotSet = incidents.filter((i) => i.category === "Not set").length;
+  const statusNotSet = incidents.filter((i) => i.status === "Not set").length;
 
   const displayedIncidents = useMemo(() => {
     if (!incidents.length) return [];
-    return filterIncidents(incidents, {
+    return filterIncidents(incidents.filter((i) => matchesLinkFilters(i, linkFilters)), {
       search: deferredSearch,
       department,
       category,
@@ -62,13 +86,13 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
       dateFrom,
       dateTo,
     });
-  }, [incidents, deferredSearch, department, category, status, station, dateFrom, dateTo]);
+  }, [incidents, linkFilters, deferredSearch, department, category, status, station, dateFrom, dateTo]);
 
   const isFilterPending = isPending || deferredSearch !== searchInput;
 
   const typeLabels = (data.incidentTypes ?? []).map((i) => i.label) ?? [];
   const typeValues = (data.incidentTypes ?? []).map((i) => i.value) ?? [];
-  const details = CHART_DETAILS.incidentLog;
+  const details = useMemo(() => buildChartDetails(incidents).incidentLog, [incidents]);
 
   const updateFilter = (fn: () => void) => {
     startTransition(fn);
@@ -155,6 +179,31 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
           subtitle="Complete log of all safety incidents with search, filters, and detailed views."
         />
       </motion.div>
+
+      {activeLinkKeys.length ? (
+        <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-2 text-xs">
+          {activeLinkKeys.map((key) => (
+            <span
+              key={key}
+              className="inline-flex items-center gap-1 rounded-full border theme-border bg-[var(--table-row-hover)] px-3 py-1 font-medium"
+            >
+              {LINK_FILTER_LABELS[key]}: {key === "ghr" ? `${linkFilters[key]!.split(",").length} selected` : linkFilters[key]}
+              <button
+                type="button"
+                aria-label={`Remove ${LINK_FILTER_LABELS[key]} filter`}
+                className="ml-1 rounded-full px-1 hover:bg-slate-500/20"
+                onClick={() => removeLinkFilter(key)}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          <span className="theme-text-muted">— {displayedIncidents.length} incidents</span>
+          <Link href="/pattern-analysis" className="ml-auto underline-offset-2 hover:underline">
+            ← Back to Pattern Analysis
+          </Link>
+        </motion.div>
+      ) : null}
 
       <KpiCardGrid>
         <AnimatedKpiCard index={0} label="Total Incidents" value={kpis.total ?? 0} tone="gold" />
@@ -266,6 +315,13 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
                         borderLeft: highlighted ? "4px solid #D4A017" : "4px solid transparent",
                         transition: "all 0.3s ease",
                       }}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedIncident(incident);
+                        }
+                      }}
                       onClick={() => setSelectedIncident(incident)}
                     >
                       <td className="tabular-nums">{incident.serialNo}</td>
@@ -307,8 +363,15 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
         <div>
           <ExpandableChart
             title="Incidents by Type"
+            subtitle="An incident can appear in more than one bar."
             renderChart={() => (
-              <CountChart labels={typeLabels} values={typeValues} type="horizontal" />
+              <CountChart
+                labels={typeLabels}
+                values={typeValues}
+                type="horizontal"
+                colors={typeLabels.map(typeColor)}
+                {...chartLinks(incidents, "type")}
+              />
             )}
             {...details.byType}
           />
@@ -322,10 +385,25 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
             modalVariant="compact"
             renderChart={() => (
               <CountChart
-                labels={["CAT-A", "CAT-B", "CAT-C", "CAT-D"]}
-                values={[kpis.catA ?? 0, kpis.catB ?? 0, kpis.catC ?? 0, kpis.catD ?? 0]}
+                labels={[
+                  "CAT-A",
+                  "CAT-B",
+                  "CAT-C",
+                  "CAT-D",
+                  ...(catNil ? ["NIL"] : []),
+                  ...(catNotSet ? ["Not set"] : []),
+                ]}
+                values={[
+                  kpis.catA ?? 0,
+                  kpis.catB ?? 0,
+                  kpis.catC ?? 0,
+                  kpis.catD ?? 0,
+                  ...(catNil ? [catNil] : []),
+                  ...(catNotSet ? [catNotSet] : []),
+                ]}
                 type="doughnut"
                 centerText={String(kpis.total ?? 0)}
+                {...chartLinks(incidents, "category")}
               />
             )}
             {...details.category}
@@ -340,6 +418,8 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
                 inProgress={kpis.inProgress ?? 0}
                 pending={kpis.pending ?? 0}
                 closed={kpis.closed ?? 0}
+                notSet={statusNotSet}
+                {...chartLinks(incidents, "status")}
               />
             )}
             {...details.status}
@@ -347,7 +427,12 @@ function IncidentLogContent({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      <IncidentDetailDrawer incident={selectedIncident} onClose={() => setSelectedIncident(null)} />
+      <IncidentDetailDrawer
+        incident={selectedIncident}
+        onClose={() => setSelectedIncident(null)}
+        incidents={displayedIncidents}
+        onNavigate={setSelectedIncident}
+      />
     </motion.div>
   );
 }

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BirdFlightLogo } from "@/components/dashboard/BirdFlightLogo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { DataIssuesBadge } from "@/components/layout/DataIssuesBadge";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
+import { READ_ONLY_CLIENT } from "@/lib/read-only";
 
 export function Header() {
   const router = useRouter();
@@ -13,10 +15,10 @@ export function Header() {
 
   return (
     <header className="glass-header sticky top-0 z-40 border-b theme-border">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6 sm:py-3">
+      <div className="flex items-center justify-between gap-4 px-4 py-2.5 sm:px-6 sm:py-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
           <Link
-            href="/incident-log"
+            href="/overview"
             className="shrink-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-gold)]"
           >
             <BirdFlightLogo
@@ -37,6 +39,7 @@ export function Header() {
               >
                 {fileName}
               </span>
+              {READ_ONLY_CLIENT ? null : (
               <button
                 type="button"
                 onClick={() => {
@@ -47,8 +50,15 @@ export function Header() {
               >
                 Change file
               </button>
+              )}
             </div>
           ) : null}
+          {READ_ONLY_CLIENT ? (
+            <span className="view-only-badge rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600" title="Changes are turned off on this site">
+              View only
+            </span>
+          ) : null}
+          <DataIssuesBadge />
           <ThemeToggle />
         </div>
       </div>

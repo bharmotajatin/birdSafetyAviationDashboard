@@ -58,7 +58,8 @@ export function getDateRange(data: InjuryModalRow[]): string {
   if (dates.length < 2) {
     return dates[0]?.getFullYear()?.toString() ?? "N/A";
   }
-  const fmt = (date: Date) => date.toLocaleString("default", { month: "short", year: "2-digit" });
+  const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const fmt = (date: Date) => `${SHORT_MONTHS[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
   return `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`;
 }
 

@@ -1,6 +1,8 @@
 import type { Incident } from "@/lib/types";
 import { navigateFiltersFromQueryParts } from "./navigateFilters";
 import type { NaturalQueryResult } from "./types";
+import { departmentsOf, incidentTypesOf } from "@/lib/analytics";
+import { knownIncidentTypes } from "./topType";
 
 const MONTH_ALIASES: Record<string, string> = {
   january: "01",
@@ -86,15 +88,16 @@ function extractYears(text: string): string[] {
   return [...new Set([...text.matchAll(/\b(20\d{2})\b/g)].map((m) => m[1]))];
 }
 
-function extractTypeTerms(text: string): string[] {
-  const terms: string[] = [];
-  if (/\bnear[\s-]?miss\b/.test(text)) terms.push("near miss");
-  if (/\bstaff[\s-]?injur/.test(text)) terms.push("staff injury");
-  if (/\bgse\b/.test(text)) terms.push("gse");
-  if (/\bloading[\s-]?error\b/.test(text)) terms.push("loading error");
-  if (/\ba\/?c[\s-]?damage\b|\baircraft[\s-]?damage\b/.test(text)) terms.push("a/c damage");
-  if (/\bslip\b/.test(text)) terms.push("slip");
-  return terms;
+/** PA-07: type terms come from the uploaded data's own incident types, not a hardcoded list. */
+function extractTypeTerms(text: string, knownTypes: string[] = []): string[] {
+  const squash = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const hay = ` ${squash(text)} `;
+  return knownTypes
+    .filter((type) => {
+      const t = squash(type);
+      return t && (hay.includes(` ${t} `) || hay.includes(` ${t.replace(/ /g, "")} `));
+    })
+    .map((type) => type.toLowerCase());
 }
 
 function extractIntent(text: string): ParsedFilters["intent"] {
@@ -144,14 +147,15 @@ function buildFilterDescription(filters: ParsedFilters): string {
 
 export function parseNaturalQuery(query: string, incidents: Incident[]): NaturalQueryResult {
   const filters = parseFilters(query);
+  filters.typeTerms = extractTypeTerms(query, knownIncidentTypes(incidents));
   const matchedIncidents = incidents.filter((incident) => {
     if (filters.category && incident.category !== filters.category) return false;
     if (filters.status && incident.status !== filters.status) return false;
-    if (filters.department && incident.department !== filters.department) return false;
+    if (filters.department && !departmentsOf(incident).includes(filters.department)) return false;
     if (!refineMonthMatch(incident, filters)) return false;
     if (filters.typeTerms.length > 0) {
-      const hay = incident.incidentType.toLowerCase();
-      if (!filters.typeTerms.some((t) => hay.includes(t))) return false;
+      const types = incidentTypesOf(incident).map((t) => t.toLowerCase());
+      if (!filters.typeTerms.some((t) => types.includes(t))) return false;
     }
     return true;
   });

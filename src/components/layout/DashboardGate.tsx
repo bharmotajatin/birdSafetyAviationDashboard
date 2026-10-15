@@ -1,7 +1,6 @@
 "use client";
 
-import { Header } from "@/components/layout/Header";
-import { SheetTabs } from "@/components/layout/SheetTabs";
+import { AppShell } from "@/components/layout/AppShell";
 import { UploadScreen } from "@/components/dashboard/upload-screen";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 import { LoadingSkeleton } from "@/components/ui/dashboard-primitives";
@@ -23,13 +22,5 @@ export function DashboardGate({ children }: { children: React.ReactNode }) {
     return <UploadScreen />;
   }
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      <SheetTabs />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-        {children}
-      </main>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }

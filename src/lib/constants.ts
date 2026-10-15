@@ -2,6 +2,7 @@ import {
   BarChart2,
   Building,
   Calendar,
+  ClipboardCheck,
   FileText,
   GitMerge,
   Map,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 
 export const STATIONS = [
+  "BLR",
   "CJB",
   "COK",
   "DEL",
@@ -30,6 +32,8 @@ export const CATEGORY_COLORS = {
   "CAT-B": "#f59e0b",
   "CAT-C": "#fbbf24",
   "CAT-D": "#22c55e",
+  NIL: "#94a3b8",
+  "Not set": "#64748b",
 } as const;
 
 export const STATUS_COLORS = {
@@ -37,6 +41,7 @@ export const STATUS_COLORS = {
   "In Progress": "#f59e0b",
   Closed: "#22c55e",
   Pending: "#8b5cf6",
+  "Not set": "#64748b",
 } as const;
 
 /** Fixed order for status breakdown horizontal bars */
@@ -125,4 +130,5 @@ export const ROUTES: ReadonlyArray<{
   { href: "/monthly", label: "Monthly", icon: Calendar },
   { href: "/graphs", label: "Graphs", icon: TrendingUp },
   { href: "/pattern-analysis", label: "Patterns", icon: GitMerge },
+  { href: "/data-check", label: "Data Check", icon: ClipboardCheck },
 ] as const;

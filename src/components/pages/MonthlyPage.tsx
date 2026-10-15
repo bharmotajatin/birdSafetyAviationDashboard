@@ -15,7 +15,9 @@ import {
   StatusBreakdownChart,
 } from "@/components/charts/DashboardCharts";
 import { fadeUp, stagger } from "@/lib/animations";
-import { CHART_DETAILS } from "@/lib/chart-details";
+import { useMemo } from "react";
+import { buildChartDetails } from "@/lib/chart-details";
+import { dataMonthSpan } from "@/lib/month-range";
 import { CATEGORY_COLORS } from "@/lib/constants";
 import type { DashboardData } from "@/lib/types";
 
@@ -30,7 +32,8 @@ export function MonthlyPage() {
 function MonthlyContent({ data }: { data: DashboardData }) {
   const kpis = data.kpis;
   const monthlyTrend = data.monthlyTrend ?? [];
-  const details = CHART_DETAILS.monthly;
+  const allDetails = useMemo(() => buildChartDetails(data.incidents ?? []), [data.incidents]);
+  const details = allDetails.monthly;
   const catAMonths = monthlyTrend.filter((m) => m.catA > 0);
 
   const trendLabels = monthlyTrend.map((m) => m.label) ?? [];
@@ -43,7 +46,7 @@ function MonthlyContent({ data }: { data: DashboardData }) {
       <motion.div variants={fadeUp}>
         <PageHeader
           title="Monthly Dashboard"
-          subtitle="Month-by-month trend analysis from January 2025 to February 2026."
+          subtitle={`Month-by-month trend analysis${dataMonthSpan(data.incidents ?? []) ? ` from ${dataMonthSpan(data.incidents ?? [])}` : ""}.`}
         />
       </motion.div>
 
@@ -88,7 +91,7 @@ function MonthlyContent({ data }: { data: DashboardData }) {
                   closed={kpis.closed ?? 0}
                 />
               )}
-              {...CHART_DETAILS.incidentLog.status}
+              {...allDetails.incidentLog.status}
             />
           </div>
           <div>
@@ -102,7 +105,7 @@ function MonthlyContent({ data }: { data: DashboardData }) {
                   colors={Object.values(CATEGORY_COLORS)}
                 />
               )}
-              {...CHART_DETAILS.incidentLog.category}
+              {...allDetails.incidentLog.category}
             />
           </div>
         </div>

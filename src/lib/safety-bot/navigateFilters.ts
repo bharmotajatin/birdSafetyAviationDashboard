@@ -14,7 +14,6 @@ export function navigateFiltersForQuestion(questionId: string): IncidentLogBotFi
     "ramp-incidents": { department: "RAMP" },
     "cargo-dept": { department: "CARGO" },
     "gse-incidents": { search: "gse" },
-    "loading-errors": { search: "loading" },
     "del-risk": { station: "DEL" },
     "highest-risk-station": { station: "DEL" },
   };
