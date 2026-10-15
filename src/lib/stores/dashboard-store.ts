@@ -59,10 +59,11 @@ type DashboardState = {
   refreshFromDataFolder: () => Promise<MergeResult | null>;
   confirmValidationAndLoad: () => Promise<void>;
   dismissValidation: () => void;
-  clearWorkbook: () => void;
+  clearWorkbook: () => Promise<void>;
   /** Alias for clearWorkbook — used by "Change file". */
   reset: () => void;
   hydrateFromStorage: () => boolean;
+  hydrateFromServer: () => Promise<void>;
   setSelectedIncident: (incident: Incident | null) => void;
   setBotFilter: (filter: Partial<IncidentLogBotFilters>) => void;
   clearBotFilter: () => void;
@@ -98,6 +99,16 @@ function persistDashboardToStorage(fileName: string, data: DashboardData): void 
   saveIncidentData(data.incidents, fileName);
 }
 
+async function storeWorkbookOnServer(file: File): Promise<void> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch("/api/data/workbook", { method: "POST", body });
+  const json = (await res.json()) as { error?: string };
+  if (!res.ok) {
+    throw new Error(json.error ?? "Failed to store the workbook.");
+  }
+}
+
 async function fetchValidateFromData(fileName: string): Promise<WorkbookValidation> {
   const res = await fetch(`/api/data/validate?file=${encodeURIComponent(fileName)}`);
   const json = await res.json();
@@ -129,6 +140,7 @@ async function executePendingLoad(
     const buffer = await pending.file.arrayBuffer();
     const data = parseWorkbook(buffer);
     verifyMonthlyTrendIntegrity(data);
+    await storeWorkbookOnServer(pending.file);
     set({
       workbookLoaded: true,
       fileName: pending.file.name,
@@ -230,6 +242,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
       const data = parseWorkbook(buffer);
       verifyMonthlyTrendIntegrity(data);
+      await storeWorkbookOnServer(file);
       set({
         workbookLoaded: true,
         fileName: file.name,
@@ -326,7 +339,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       isLoading: false,
     }),
 
-  clearWorkbook: () => {
+  clearWorkbook: async () => {
     clearBfsStorage();
     set({
       workbookLoaded: false,
@@ -341,6 +354,51 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       validationLoadAnyway: false,
       pendingLoad: null,
     });
+    try {
+      await fetch("/api/data/workbook", { method: "DELETE" });
+    } catch {
+      set({ error: "The sheet was cleared on this screen, but the stored copy could not be removed." });
+    }
+  },
+
+  hydrateFromServer: async () => {
+    try {
+      const res = await fetch("/api/data/workbook");
+      if (!res.ok) {
+        get().hydrateFromStorage();
+        return;
+      }
+      const json = (await res.json()) as {
+        workbook: { fileName: string } | null;
+        incidents: Incident[];
+      };
+      if (!json.workbook || !json.incidents?.length) {
+        clearBfsStorage();
+        set({
+          workbookLoaded: false,
+          fileName: null,
+          data: null,
+          isLoading: false,
+        });
+        return;
+      }
+      const incidents = json.incidents.map((incident) => ({
+        ...incident,
+        date: incident.date ? new Date(incident.date) : null,
+      }));
+      const data = rebuildDashboard(incidents);
+      verifyMonthlyTrendIntegrity(data);
+      set({
+        workbookLoaded: true,
+        fileName: json.workbook.fileName,
+        data,
+        isLoading: false,
+        error: null,
+      });
+      persistDashboardToStorage(json.workbook.fileName, data);
+    } catch {
+      get().hydrateFromStorage();
+    }
   },
 
   reset: () => {
